@@ -22,18 +22,78 @@
       for (id subItem in subArray) {
         if (subItem) {
           PSPDFAnnotationString annotationString = [RCTConvert PSPDFAnnotationStringFromName:subItem];
-          [subItems addObject:[PSPDFAnnotationGroupItem itemWithType:annotationString]];
+          PSPDFAnnotationGroupItemConfigurationBlock configurationBlock = ^UIImage *(PSPDFAnnotationGroupItem *item, id container, UIColor *tintColor){
+              return [[RCTConvert configureBlockImage:subItem] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+          };
+          [subItems addObject:[PSPDFAnnotationGroupItem itemWithType:annotationString variant:@"" configurationBlock:configurationBlock]];
+          //[subItems addObject:[PSPDFAnnotationGroupItem itemWithType:annotationString]];
         }
       }
       [parsedItems addObject:[PSPDFAnnotationGroup groupWithItems:subItems]];
     } else {
+        NSLog(@"aaaaa: %@",itemToParse);
       PSPDFAnnotationString annotationString = [RCTConvert PSPDFAnnotationStringFromName:itemToParse];
+        NSLog(@"aaaaa: %@",annotationString);
       if (annotationString) {
-        [parsedItems addObject:[PSPDFAnnotationGroup groupWithItems:@[[PSPDFAnnotationGroupItem itemWithType:annotationString]]]];
+        PSPDFAnnotationGroupItemConfigurationBlock configurationBlock = ^UIImage *(PSPDFAnnotationGroupItem *item, id container, UIColor *tintColor){
+            return [[RCTConvert configureBlockImage:itemToParse] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+        };
+        [parsedItems addObject:[PSPDFAnnotationGroup groupWithItems:@[[PSPDFAnnotationGroupItem itemWithType:annotationString variant:@"" configurationBlock:configurationBlock]]]];
       }
     }
   }
   return  [[PSPDFAnnotationToolbarConfiguration alloc] initWithAnnotationGroups:parsedItems];
+}
+
++ (UIImage *)configureBlockImage:(NSString *)name {
+    NSLog(@"aa: %@",name);
+    UIImage *image;
+    if([name isEqualToString:@"link"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"highlight"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"strikeout"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"underline"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"squiggly"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"note"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_note"];
+    }else if([name isEqualToString:@"freetext"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_text"];
+    }else if([name isEqualToString:@"ink"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"square"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen-rectangle"];
+    }else if([name isEqualToString:@"circle"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen-ellipse"];
+    }else if([name isEqualToString:@"line"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen-line"];
+    }else if([name isEqualToString:@"polygon"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen-polygon"];
+    }else if([name isEqualToString:@"polyline"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen-polyline"];
+    }else if([name isEqualToString:@"signature"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_signiture"];
+    }else if([name isEqualToString:@"stamp"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"eraser"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_eraser"];
+    }else if([name isEqualToString:@"widget"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen"];
+    }else if([name isEqualToString:@"image"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_picture"];
+    }else if([name isEqualToString:@"selectiontool"]){
+        image = [PSPDFKitGlobal imageNamed:@"icon_lasso"];
+    }else if([name isEqualToString:@"highlighter"]){
+        NSLog(@"highlighter");
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen-highlight"];
+    }else if([name isEqualToString:@"arrow"]){
+        NSLog(@"arrow");
+        image = [PSPDFKitGlobal imageNamed:@"icon_pen-highlight"];
+    }
+    return image;
 }
 
 + (PSPDFAnnotationString)PSPDFAnnotationStringFromName:(NSString *)name {
@@ -63,6 +123,9 @@
     [mapping setValue:PSPDFAnnotationStringSound forKeyPath:@"sound"];
     [mapping setValue:PSPDFAnnotationStringImage forKeyPath:@"image"];
     [mapping setValue:PSPDFAnnotationStringRedaction forKeyPath:@"redaction"];
+    [mapping setValue:PSPDFAnnotationStringSelectionTool forKeyPath:@"selectiontool"];
+    [mapping setValue:PSPDFAnnotationVariantStringInkHighlighter forKeyPath:@"highlighter"];
+    [mapping setValue:PSPDFAnnotationVariantStringLineArrow forKey:@"arrow"];
     
     nameToAnnotationStringMapping = [[NSDictionary alloc] initWithDictionary:mapping];
   });

@@ -7,32 +7,57 @@
 //  This notice may not be removed from this file.
 //
 
+#import <PSPDFKitUI/PSPDFDocumentViewController.h>
 #import "RCTPSPDFKitView.h"
 #import <React/RCTUtils.h>
+#import "RCTConvert+PSPDFConfiguration.h"
 #import "RCTConvert+PSPDFAnnotation.h"
 #import "RCTConvert+PSPDFViewMode.h"
 #import "RCTConvert+UIBarButtonItem.h"
+#import "PSCCustomUserInterfaceView.h"
 
 #define VALIDATE_DOCUMENT(document, ...) { if (!document.isValid) { NSLog(@"Document is invalid."); if (self.onDocumentLoadFailed) { self.onDocumentLoadFailed(@{@"error": @"Document is invalid."}); } return __VA_ARGS__; }}
 
 @interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate>
 
+@property (nonatomic, nullable) UIViewController *controller;
+@property (nonatomic, nullable) NSNumber *mynumber;
 @property (nonatomic, nullable) UIViewController *topController;
+@property (nonatomic, nullable) UINavigationBar *navBarProxy;
+@property (nonatomic, nullable) UIToolbar *toolbarProxy;
+@property (nonatomic, nullable) UIColor *mainColor;
+@property (nonatomic, nullable) UIColor *secondaryColor;
+@property (nonatomic, nullable) UIPanGestureRecognizer *recognizer;
+@property (nonatomic) PSPDFDocumentViewLayout *layout;
+@property (nonatomic) PSCCustomUserInterfaceView *customView;
+@property (weak, nonatomic) IBOutlet UILabel *callbackLabel;
 
 @end
 
 @implementation RCTPSPDFKitView
-
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
-    _pdfController = [[PSPDFViewController alloc] init];
+    _mainColor = [UIColor blackColor];
+    _secondaryColor = [UIColor whiteColor];
+
+    // Navigation bar and toolbar customization. We're limiting appearance customization to instances that are
+    // inside `PSPDFNavigationController` so that we don't affect the appearance of certain system controllers.
+    _navBarProxy = [UINavigationBar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
+    _toolbarProxy = [UIToolbar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
+    
+    _customView = [[PSCCustomUserInterfaceView alloc] init];
+
+    _pdfController = [[PSPDFViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
+        [builder overrideClass:PSPDFUserInterfaceView.class withClass:_customView.class];
+    }]];
     _pdfController.delegate = self;
     _pdfController.annotationToolbarController.delegate = self;
-    _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"x"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
-    
+    _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
+      
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationChangedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsAddedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsRemovedNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTime:) name:@"setPlaytimes" object:nil];
   }
   
   return self;
@@ -51,31 +76,71 @@
 }
 
 - (void)didMoveToWindow {
-  UIViewController *controller = self.pspdf_parentViewController;
-  if (controller == nil || self.window == nil || self.topController != nil) {
+    // On iOS 13 and later.
+    if (@available(iOS 13, *)) {
+        // `UINavigationBar` styling.
+        UINavigationBarAppearance *navigationBarAppearance = [[UINavigationBarAppearance alloc] init];
+        navigationBarAppearance.backgroundColor = self.mainColor;
+
+        self.navBarProxy.standardAppearance = navigationBarAppearance;
+        self.navBarProxy.compactAppearance = navigationBarAppearance;
+        self.navBarProxy.scrollEdgeAppearance = navigationBarAppearance;
+
+        // `UIToolbar` styling.
+        UIToolbarAppearance *toolbarAppearance = [[UIToolbarAppearance alloc] init];
+        toolbarAppearance.backgroundColor = self.mainColor;
+
+        // Apply the same appearance styling to all sizes of `UIToolbar`.
+        self.toolbarProxy.standardAppearance = toolbarAppearance;
+        self.toolbarProxy.compactAppearance = toolbarAppearance;
+
+        // Make sure we're getting a light title and status bar.
+        self.navBarProxy.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    } else {
+        // On iOS 12 and earlier.
+        self.navBarProxy.barTintColor = self.mainColor;
+        self.toolbarProxy.barTintColor = self.mainColor;
+
+        // Make sure we're getting a light title and status bar.
+        self.navBarProxy.barStyle = UIBarStyleBlack;
+    }
+
+    self.navBarProxy.tintColor = self.secondaryColor;
+    self.toolbarProxy.tintColor = self.secondaryColor;
+
+  self.controller = self.pspdf_parentViewController;
+  if (self.controller == nil || self.window == nil || self.topController != nil) {
     return;
   }
-  
-  if (self.pdfController.configuration.useParentNavigationBar || self.hideNavigationBar) {
-    self.topController = self.pdfController;
+
+  // if (self.pdfController.configuration.useParentNavigationBar || self.hi   deNavigationBar) {
+  //   self.topController = self.pdfController;
     
-  } else {
-    self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];;
-  }
-  
+  // } else {
+  //   self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];;
+  // }]
+  //self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];
+
+  UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, self.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+  self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+    
+  self.topController = self.pdfController;
+  self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];
+
   UIView *topControllerView = self.topController.view;
   topControllerView.translatesAutoresizingMaskIntoConstraints = NO;
-  
+
   [self addSubview:topControllerView];
-  [controller addChildViewController:self.topController];
-  [self.topController didMoveToParentViewController:controller];
-  
+  [self.controller addChildViewController:self.topController];
+  [self.topController didMoveToParentViewController:self.controller];
+
   [NSLayoutConstraint activateConstraints:
    @[[topControllerView.topAnchor constraintEqualToAnchor:self.topAnchor],
      [topControllerView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
      [topControllerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
      [topControllerView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
    ]];
+
 }
 
 - (void)destroyViewControllerRelationship {
@@ -386,7 +451,13 @@
 - (void)setLeftBarButtonItems:(nullable NSArray <NSString *> *)items forViewMode:(nullable NSString *) viewMode animated:(BOOL)animated {
   NSMutableArray *leftItems = [NSMutableArray array];
   for (NSString *barButtonItemString in items) {
-    UIBarButtonItem *barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
+      NSLog(@"aaa: %@",barButtonItemString);
+      UIBarButtonItem *barButtonItem;
+      if([barButtonItemString isEqualToString:@"closeButtonItem"]) {
+          barButtonItem = _closeButton;
+      } else{
+          barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
+      }
     if (barButtonItem && ![self.pdfController.navigationItem.rightBarButtonItems containsObject:barButtonItem]) {
       [leftItems addObject:barButtonItem];
     }
@@ -474,6 +545,17 @@
     }
   }];
   return [barButtonItemsString copy];
+}
+
+// 델리게이터 함수 구현 값을 받음
+-(void)setPlayTime:(NSNotification *)noti{
+    NSDictionary *notiDic=[noti userInfo];
+    self.mynumber = [notiDic objectForKey:@"playTime"];
+    double i = [self.mynumber doubleValue];
+    NSLog(@"asd: %f",i);
+    
+    UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, i, 0.0, 0.0);
+    self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
 }
 
 @end

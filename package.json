@@ -1,6 +1,6 @@
 {
-  "name": "react-native-pspdfkit",
-  "version": "1.26.4",
+  "name": "react-native-pspdfkit-fillgi",
+  "version": "0.0.3",
   "description": "A React Native module for the PSPDFKit library.",
   "keywords": [
     "react native",
@@ -12,10 +12,10 @@
     "url": "https://github.com/PSPDFKit/react-native/issues",
     "email": "support@pspdfkit.com"
   },
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "UNLICENSED",
   "repository": {
     "type": "git",
-    "url": "https://github.com/PSPDFKit/react-native.git"
+    "url": "git+https://github.com/PSPDFKit/react-native.git"
   },
   "scripts": {
     "start": "node node_modules/react-native/local-cli/cli.js start",
@@ -29,5 +29,7 @@
   "dependencies": {},
   "devDependencies": {
     "prettier": "^1.14.3"
-  }
+  },
+  "main": "index.js",
+  "author": "hwan"
 }

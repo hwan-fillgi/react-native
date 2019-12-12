@@ -47,32 +47,41 @@
 
 + (UIBarButtonItem *)uiBarButtonItemFrom:(NSString *)barButtonItem forViewController:(PSPDFViewController *)pdfController {
   if ([barButtonItem isEqualToString:@"closeButtonItem"]) {
+    pdfController.closeButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_getout"];
     return pdfController.closeButtonItem;
   } else if ([barButtonItem isEqualToString:@"outlineButtonItem"]) {
     return pdfController.outlineButtonItem;
   } else if ([barButtonItem isEqualToString:@"searchButtonItem"]) {
+    pdfController.searchButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_search"];
     return pdfController.searchButtonItem;
   } else if ([barButtonItem isEqualToString:@"thumbnailsButtonItem"]) {
+    pdfController.thumbnailsButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_page"];
     return pdfController.thumbnailsButtonItem;
   } else if ([barButtonItem isEqualToString:@"documentEditorButtonItem"]) {
+    pdfController.documentEditorButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_add"];
     return pdfController.documentEditorButtonItem;
   } else if ([barButtonItem isEqualToString:@"printButtonItem"]) {
     return pdfController.printButtonItem;
   } else if ([barButtonItem isEqualToString:@"openInButtonItem"]) {
+    pdfController.openInButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_share"];
     return pdfController.openInButtonItem;
   } else if ([barButtonItem isEqualToString:@"emailButtonItem"]) {
     return pdfController.emailButtonItem;
   } else if ([barButtonItem isEqualToString:@"messageButtonItem"]) {
+    pdfController.messageButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_chat"];
     return pdfController.messageButtonItem;
   } else if ([barButtonItem isEqualToString:@"annotationButtonItem"]) {
+    pdfController.annotationButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_write"];
     return pdfController.annotationButtonItem;
   } else if ([barButtonItem isEqualToString:@"bookmarkButtonItem"]) {
     return pdfController.bookmarkButtonItem;
   } else if ([barButtonItem isEqualToString:@"brightnessButtonItem"]) {
     return pdfController.brightnessButtonItem;
   } else if ([barButtonItem isEqualToString:@"activityButtonItem"]) {
+    pdfController.activityButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_colabo"];
     return pdfController.activityButtonItem;
   } else if ([barButtonItem isEqualToString:@"settingsButtonItem"]) {
+    pdfController.settingsButtonItem.image = [PSPDFKitGlobal imageNamed:@"icon_setting"];
     return pdfController.settingsButtonItem;
   } else {
     return nil;
