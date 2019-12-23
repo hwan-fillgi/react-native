@@ -194,32 +194,9 @@
         NSURL *requestURL = [NSURL URLWithString:@"https://www.naver.com/"];
 
         _webController = [[PSPDFWebViewController alloc] initWithURL:requestURL];
-        _navigationController = [[UINavigationController alloc] initWithRootViewController:self.webController];
-        _navigationController.view.translatesAutoresizingMaskIntoConstraints = NO;
-        _navigationController.navigationBarHidden = true;
-
-        //_navigationController.navigationBar.hidden = true;
-        [self addSubview:self.navigationController.view];
-
-        UIImageView *imageView = [[UIImageView alloc]init];
-        [imageView setImage:[PSPDFKitGlobal imageNamed:@"scroll_bar"]];
-        [imageView sizeToFit];
-        imageView.userInteractionEnabled = YES;
-        imageView.center = CGPointMake(self.navigationController.view.frame.size.width / 2, self.navigationController.view.frame.size.height / 2);
-        [self addSubview:imageView];
-
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
-        [imageView addGestureRecognizer:pan];
-
-        [NSLayoutConstraint activateConstraints:
-            @[[self.navigationController.view.topAnchor constraintEqualToAnchor:self.topAnchor constant:74],
-            [self.navigationController.view.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-            [self.navigationController.view.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-            [self.navigationController.view.trailingAnchor constraintEqualToAnchor:imageView.centerXAnchor]
-            ]];
+        [self.navigationController initWithRootViewController:self.webController];
     } else if (i == 2) {
-        self.tabController.documents = [self.documents copy];
-          
+        _tabController = [[PSPDFTabbedViewController alloc] init];
         [self.tabController.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
             builder.pageMode = PSPDFPageModeSingle;
             builder.scrollDirection = PSPDFScrollDirectionVertical;
@@ -229,30 +206,8 @@
             builder.pageLabelEnabled = NO;
             builder.documentLabelEnabled = NO;
         }];
-
-        _navigationController = [[UINavigationController alloc] initWithRootViewController:self.tabController];
-        _navigationController.view.translatesAutoresizingMaskIntoConstraints = NO;
-        _navigationController.navigationBarHidden = true;
-
-        //_navigationController.navigationBar.hidden = true;
-        [self addSubview:self.navigationController.view];
-
-        UIImageView *imageView = [[UIImageView alloc]init];
-        [imageView setImage:[PSPDFKitGlobal imageNamed:@"scroll_bar"]];
-        [imageView sizeToFit];
-        imageView.userInteractionEnabled = YES;
-        imageView.center = CGPointMake(self.navigationController.view.frame.size.width / 2, self.navigationController.view.frame.size.height / 2);
-        [self addSubview:imageView];
-
-        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
-        [imageView addGestureRecognizer:pan];
-
-        [NSLayoutConstraint activateConstraints:
-            @[[self.navigationController.view.topAnchor constraintEqualToAnchor:self.topAnchor constant:74],
-            [self.navigationController.view.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-            [self.navigationController.view.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-            [self.navigationController.view.trailingAnchor constraintEqualToAnchor:imageView.centerXAnchor]
-            ]];
+        self.tabController.documents = [self.documents copy];
+        [self.navigationController initWithRootViewController:self.tabController];
     }
 }
 @end
