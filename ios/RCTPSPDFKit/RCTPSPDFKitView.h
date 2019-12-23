@@ -20,6 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) PSPDFViewController *pdfController;
 @property (nonatomic) BOOL hideNavigationBar;
 @property (nonatomic, readonly) UIBarButtonItem *closeButton;
+@property (nonatomic, readonly) UIBarButtonItem *addButton;
+@property (nonatomic, readonly) UIBarButtonItem *browserButton;
 @property (nonatomic) BOOL disableDefaultActionForTappedAnnotations;
 @property (nonatomic) BOOL disableAutomaticSaving;
 @property (nonatomic, copy, nullable) NSString *annotationAuthorName;
@@ -30,6 +32,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) RCTBubblingEventBlock onAnnotationTapped;
 @property (nonatomic, copy) RCTBubblingEventBlock onAnnotationsChanged;
 @property (nonatomic, copy) RCTBubblingEventBlock onStateChanged;
+@property (nonatomic, readonly) UIDocumentPickerViewController *filePickerController;
+@property (nonatomic, readonly) UIViewController *rootViewController;
 
 /// Annotation Toolbar
 - (BOOL)enterAnnotationCreationMode;

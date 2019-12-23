@@ -28,15 +28,16 @@
 @property (nonatomic, nullable) UIColor *mainColor;
 @property (nonatomic, nullable) UIColor *secondaryColor;
 @property (nonatomic, nullable) UIPanGestureRecognizer *recognizer;
+@property (nonatomic, nullable) BOOL *browser;
 @property (nonatomic) PSPDFDocumentViewLayout *layout;
 @property (nonatomic) PSCCustomUserInterfaceView *customView;
-@property (weak, nonatomic) IBOutlet UILabel *callbackLabel;
 
 @end
 
 @implementation RCTPSPDFKitView
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
+    _browser = YES;
     _mainColor = [UIColor blackColor];
     _secondaryColor = [UIColor whiteColor];
 
@@ -45,14 +46,14 @@
     _navBarProxy = [UINavigationBar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     _toolbarProxy = [UIToolbar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     
-    _customView = [[PSCCustomUserInterfaceView alloc] init];
-
     _pdfController = [[PSPDFViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
-        [builder overrideClass:PSPDFUserInterfaceView.class withClass:_customView.class];
+        [builder overrideClass:PSPDFUserInterfaceView.class withClass:PSCCustomUserInterfaceView.class];
     }]];
     _pdfController.delegate = self;
     _pdfController.annotationToolbarController.delegate = self;
     _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
+    _addButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addDocuments:)];
+    _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
       
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationChangedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsAddedNotification object:nil];
@@ -169,6 +170,36 @@
       [self.pdfController dismissViewControllerAnimated:YES completion:NULL];
     }
   }
+}
+
+- (void)addDocuments:(nullable id)sender {
+    double f1 = 0.11;
+    NSNumber* num1 = [NSNumber numberWithDouble:f1];
+    NSDictionary *notiDic=nil;
+    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTim", nil];
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytims" object:nil userInfo:notiDic];
+}
+
+- (void)switchBrowser:(nullable id)sender {
+    NSLog(@"bValue1 : %@", (self.browser ? @"YES" : @"NO"));
+    
+    if (self.browser) {
+        int f1 = 1;
+        NSNumber* num1 = [NSNumber numberWithDouble:f1];
+        NSDictionary *notiDic=nil;
+        notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTi", nil];
+        [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytis" object:nil userInfo:notiDic];
+
+        self.browser = !self.browser;
+    } else {
+        int f1 = 2;
+        NSNumber* num1 = [NSNumber numberWithDouble:f1];
+        NSDictionary *notiDic=nil;
+        notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTi", nil];
+        [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytis" object:nil userInfo:notiDic];
+
+        self.browser = !self.browser;
+    }
 }
 
 - (UIViewController *)pspdf_parentViewController {
@@ -451,10 +482,13 @@
 - (void)setLeftBarButtonItems:(nullable NSArray <NSString *> *)items forViewMode:(nullable NSString *) viewMode animated:(BOOL)animated {
   NSMutableArray *leftItems = [NSMutableArray array];
   for (NSString *barButtonItemString in items) {
-      NSLog(@"aaa: %@",barButtonItemString);
       UIBarButtonItem *barButtonItem;
       if([barButtonItemString isEqualToString:@"closeButtonItem"]) {
           barButtonItem = _closeButton;
+      } else if([barButtonItemString isEqualToString:@"addButtonItem"]) {
+          barButtonItem = _addButton;
+      } else if([barButtonItemString isEqualToString:@"browserButtonItem"]) {
+          barButtonItem = _browserButton;
       } else{
           barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
       }
