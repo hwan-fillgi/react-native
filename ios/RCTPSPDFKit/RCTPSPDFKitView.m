@@ -31,6 +31,7 @@
 @property (nonatomic, nullable) BOOL *browser;
 @property (nonatomic) PSPDFDocumentViewLayout *layout;
 @property (nonatomic) PSCCustomUserInterfaceView *customView;
+@property (nonatomic, nullable) PSPDFDocumentEditor *editor;
 
 @end
 
@@ -46,6 +47,25 @@
     _navBarProxy = [UINavigationBar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     _toolbarProxy = [UIToolbar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     
+//    PSPDFDocument *document = self.pdfController.document;
+//    self.editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
+//
+//    NSString *filename = @"aaa.pdf";
+//    NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
+//
+//    NSLog(@"filepath %@", filePath);
+//    // Save to a new PDF file.
+//    [self.editor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
+//        // Access the UI on the main thread.
+//        dispatch_async(dispatch_get_main_queue(), ^{
+//            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+//            self.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+//        });
+//    }];
+      
+    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
+    self.pdfController.document = [[PSPDFDocument alloc] initWithURL:docURL];
+      
     _pdfController = [[PSPDFViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
         [builder overrideClass:PSPDFUserInterfaceView.class withClass:PSCCustomUserInterfaceView.class];
     }]];
@@ -54,6 +74,7 @@
     _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
     _addButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addDocuments:)];
     _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
+    _pageButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addPages:)];
       
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationChangedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsAddedNotification object:nil];
@@ -170,6 +191,43 @@
       [self.pdfController dismissViewControllerAnimated:YES completion:NULL];
     }
   }
+}
+
+- (void)addPages:(nullable id)sender {
+//    NSFileManager *fileManager = [NSFileManager defaultManager];
+//    NSLog(@"gggg");
+//    PSPDFPageTemplate *template = [[PSPDFPageTemplate alloc] initWithDocument:document sourcePageIndex:0];
+//    // Add a new page as the first page.
+    
+//    PSPDFNewPageConfiguration *newPageConfiguration = [PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:template builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
+//        builder.backgroundColor = [UIColor colorWithWhite:0.95f alpha:1.f];
+//    }];
+//
+//
+//    [self.editor addPagesInRange:NSMakeRange(0,document.pageCount) withConfiguration:newPageConfiguration];
+
+    PSPDFDocument *document = self.pdfController.document;
+    if (!document) return;
+    PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
+    if (!editor) return;
+    PSPDFPageTemplate *template = [[PSPDFPageTemplate alloc] initWithDocument:document sourcePageIndex:0];
+    // Add a new page as the first page.
+    PSPDFNewPageConfiguration *newPageConfiguration = [PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:template builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
+        builder.backgroundColor = [UIColor colorWithWhite:0.95f alpha:1.f];
+    }];
+    [editor addPagesInRange:NSMakeRange(document.pageCount, 1) withConfiguration:newPageConfiguration];
+
+    // Save and overwrite the document.
+    [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
+        if (error) {
+            NSLog(@"Document editing failed: %@", error);
+            return;
+        }
+        // Access the UI on the main thread.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.pdfController reloadData];
+        });
+    }];
 }
 
 - (void)addDocuments:(nullable id)sender {
@@ -489,6 +547,8 @@
           barButtonItem = _addButton;
       } else if([barButtonItemString isEqualToString:@"browserButtonItem"]) {
           barButtonItem = _browserButton;
+      } else if([barButtonItemString isEqualToString:@"pageButtonItem"]) {
+          barButtonItem = _pageButton;
       } else{
           barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
       }

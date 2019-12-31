@@ -25,25 +25,21 @@
     
     _rootViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
       
-    NSArray *types = @[@"public.image", @"com.apple.application", @"public.item", @"public.data", @"public.content", @"public.audiovisual-content", @"public.movie", @"public.audiovisual-content", @"public.video", @"public.audio", @"public.text", @"public.data", @"public.zip-archive", @"com.pkware.zip-archive", @"public.composite-content", @"public.text"];
+    NSArray *types = @[@"public.image", @"com.apple.application", @"public.item", @"public.data", @"public.content", @"public.audiovisual-content", @"public.audiovisual-content", @"public.data", @"public.composite-content"];
 
     _filePickerController = [[UIDocumentPickerViewController alloc] initWithDocumentTypes:types inMode:UIDocumentPickerModeImport];
     _filePickerController.delegate = self;
     _selectDocumentsNavController = [[UINavigationController alloc] initWithRootViewController:self.filePickerController];
       
-    NSURL *requestURL = [NSURL URLWithString:@"https://www.naver.com/"];
-    NSURL *baseURL = [NSBundle.mainBundle URLForResource:@"youtube2" withExtension:@"html"];
+    NSURL *requestURL = [NSURL URLWithString:@"https://www.google.co.kr/"];
+    //NSURL *baseURL = [NSBundle.mainBundle URLForResource:@"youtube2" withExtension:@"html"];
     NSURL *docURL = [NSBundle.mainBundle URLForResource:@"Sample" withExtension:@"pdf"];
 
-    NSString *html = requestURL.parameterString;
+    //NSString *html = requestURL.parameterString;
 
-    _webController = [[PSPDFWebViewController alloc] initWithURL:baseURL];
+    _webController = [[PSPDFWebViewController alloc] initWithURL:requestURL];
 
     _tabController = [[PSPDFTabbedViewController alloc] init];
-    self.document = [[PSPDFDocument alloc] initWithURL:docURL];
-
-    [self.documents addObject:self.document];
-    self.tabController.documents = [self.documents copy];
       
     [self.tabController.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
         builder.pageMode = PSPDFPageModeSingle;
@@ -105,11 +101,30 @@
 
 #pragma mark - iCloud files
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
-    NSLog(@"original URL: %@", url);
-    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
-    PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:url];
-    [self.documents addObject:document];
-    self.tabController.documents = [self.documents copy];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    // 파일경로 저장
+    if (controller.documentPickerMode == UIDocumentPickerModeImport) {
+        NSString *filename = url.lastPathComponent;
+        NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
+        NSError *err = [[NSError alloc] init];
+        if ([fileManager fileExistsAtPath:filePath]){
+            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+            PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+            [self.documents addObject:document];
+            self.tabController.documents = [self.documents copy];
+        } else{
+            BOOL result = [[NSFileManager defaultManager] copyItemAtPath:url.path toPath:filePath error:&err];
+            if (result) {
+                NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+                PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                [self.documents addObject:document];
+                self.tabController.documents = [self.documents copy];
+            }
+            else {
+                NSLog(@"Import failed. %@", err.localizedDescription);
+            }
+        }
+    }
 }
 
 - (void)updateScrubberBarFrameAnimated:(BOOL)animated {
@@ -176,7 +191,7 @@
     NSDictionary *notiDic=[noti userInfo];
     self.mynumber = [notiDic objectForKey:@"playTim"];
     double i = [self.mynumber doubleValue];
-    NSLog(@"asd: %f",i);
+    
     self.selectDocumentsNavController.navigationBarHidden = YES;
     self.selectDocumentsNavController.modalPresentationStyle = UIModalPresentationFormSheet;
     self.selectDocumentsNavController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
@@ -189,25 +204,36 @@
     self.mynumber = [notiDic objectForKey:@"playTi"];
     int i = [self.mynumber intValue];
     
-    NSLog(@"browser: %d",i);
     if (i == 1) {
-        NSURL *requestURL = [NSURL URLWithString:@"https://www.naver.com/"];
-
-        _webController = [[PSPDFWebViewController alloc] initWithURL:requestURL];
-        [self.navigationController initWithRootViewController:self.webController];
+        @try {
+           [self.navigationController pushViewController:self.webController animated:NO];
+        } @catch (NSException * e) {
+            NSLog(@"Exception: %@", e);
+             [self.navigationController popToViewController:self.webController animated:NO];
+        } @finally {
+            //NSLog(@"finally");
+        }
     } else if (i == 2) {
-        _tabController = [[PSPDFTabbedViewController alloc] init];
-        [self.tabController.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
-            builder.pageMode = PSPDFPageModeSingle;
-            builder.scrollDirection = PSPDFScrollDirectionVertical;
-            builder.pageTransition = PSPDFPageTransitionScrollContinuous;
-            builder.userInterfaceViewMode = PSPDFUserInterfaceViewModeAlways;
-            builder.spreadFitting = PSPDFConfigurationSpreadFittingFill;
-            builder.pageLabelEnabled = NO;
-            builder.documentLabelEnabled = NO;
-        }];
-        self.tabController.documents = [self.documents copy];
-        [self.navigationController initWithRootViewController:self.tabController];
+//        _tabController = [[PSPDFTabbedViewController alloc] init];
+//        [self.tabController.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
+//            builder.pageMode = PSPDFPageModeSingle;
+//            builder.scrollDirection = PSPDFScrollDirectionVertical;
+//            builder.pageTransition = PSPDFPageTransitionScrollContinuous;
+//            builder.userInterfaceViewMode = PSPDFUserInterfaceViewModeAlways;
+//            builder.spreadFitting = PSPDFConfigurationSpreadFittingFill;
+//            builder.pageLabelEnabled = NO;
+//            builder.documentLabelEnabled = NO;
+//        }];
+//        self.tabController.documents = [self.documents copy];
+       // [self.navigationController pushViewController:self.tabController animated:NO];
+        @try {
+           [self.navigationController pushViewController:self.tabController animated:NO];
+        } @catch (NSException * e) {
+            NSLog(@"Exception: %@", e);
+             [self.navigationController popToViewController:self.tabController animated:NO];
+        } @finally {
+            //NSLog(@"finally");
+        }
     }
 }
 @end
