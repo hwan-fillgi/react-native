@@ -25,7 +25,46 @@ RCT_EXPORT_MODULE()
 
 RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
   if (json) {
-    view.pdfController.document = [RCTConvert PSPDFDocument:json];
+    //view.pdfController.document = [RCTConvert PSPDFDocument:json];
+    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
+      
+    PSPDFDocument *documents = [[PSPDFDocument alloc] initWithURL:docURL];
+    PSPDFPageTemplate *externalDocumentPageTemplate = [[PSPDFPageTemplate alloc] initWithDocument:documents sourcePageIndex:0];
+    NSString *filename = [RCTConvert PSPDFDocument:json];
+    NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
+      
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if ([fileManager fileExistsAtPath:filePath]){
+        //존재
+        NSLog(@"존재");
+        NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+        NSLog(@"file url %@", fileURL);
+        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+    } else{
+        //생성
+        NSLog(@"생성");
+        PSPDFDocumentEditor *documentEditor = [[PSPDFDocumentEditor alloc] init];
+        // Add the first page. At least one is needed to be able to save the document.
+        [documentEditor addPagesInRange:NSMakeRange(0, 1) withConfiguration:[PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
+            builder.pageSize = CGSizeMake(595, 842); // A4 in points
+        }]];
+        // Save to a new PDF file.
+        [documentEditor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
+            if (error) {
+                NSLog(@"Error saving document. Error: %@", error);
+            } else {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+                    view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                    UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+                    view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+                    NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+                });
+            }
+        }];
+    }
+
     view.pdfController.document.delegate = (id<PSPDFDocumentDelegate>)view;
     
     // The author name may be set before the document exists. We set it again here when the document exists.

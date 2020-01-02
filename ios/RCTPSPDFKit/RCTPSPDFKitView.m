@@ -46,31 +46,13 @@
     // inside `PSPDFNavigationController` so that we don't affect the appearance of certain system controllers.
     _navBarProxy = [UINavigationBar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     _toolbarProxy = [UIToolbar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
-    
-//    PSPDFDocument *document = self.pdfController.document;
-//    self.editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
-//
-//    NSString *filename = @"aaa.pdf";
-//    NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
-//
-//    NSLog(@"filepath %@", filePath);
-//    // Save to a new PDF file.
-//    [self.editor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
-//        // Access the UI on the main thread.
-//        dispatch_async(dispatch_get_main_queue(), ^{
-//            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-//            self.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-//        });
-//    }];
-      
-    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
-    self.pdfController.document = [[PSPDFDocument alloc] initWithURL:docURL];
       
     _pdfController = [[PSPDFViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
         [builder overrideClass:PSPDFUserInterfaceView.class withClass:PSCCustomUserInterfaceView.class];
     }]];
     _pdfController.delegate = self;
     _pdfController.annotationToolbarController.delegate = self;
+    
     _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
     _addButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addDocuments:)];
     _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
@@ -194,26 +176,17 @@
 }
 
 - (void)addPages:(nullable id)sender {
-//    NSFileManager *fileManager = [NSFileManager defaultManager];
-//    NSLog(@"gggg");
-//    PSPDFPageTemplate *template = [[PSPDFPageTemplate alloc] initWithDocument:document sourcePageIndex:0];
-//    // Add a new page as the first page.
-    
-//    PSPDFNewPageConfiguration *newPageConfiguration = [PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:template builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
-//        builder.backgroundColor = [UIColor colorWithWhite:0.95f alpha:1.f];
-//    }];
-//
-//
-//    [self.editor addPagesInRange:NSMakeRange(0,document.pageCount) withConfiguration:newPageConfiguration];
-
     PSPDFDocument *document = self.pdfController.document;
     if (!document) return;
     PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
     if (!editor) return;
-    PSPDFPageTemplate *template = [[PSPDFPageTemplate alloc] initWithDocument:document sourcePageIndex:0];
+    
+    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
+    PSPDFDocument *documents = [[PSPDFDocument alloc] initWithURL:docURL];
+    PSPDFPageTemplate *externalDocumentPageTemplate = [[PSPDFPageTemplate alloc] initWithDocument:documents sourcePageIndex:0];
     // Add a new page as the first page.
-    PSPDFNewPageConfiguration *newPageConfiguration = [PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:template builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
-        builder.backgroundColor = [UIColor colorWithWhite:0.95f alpha:1.f];
+    PSPDFNewPageConfiguration *newPageConfiguration = [PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
+        builder.pageSize = CGSizeMake(595, 842); // A4 in points
     }];
     [editor addPagesInRange:NSMakeRange(document.pageCount, 1) withConfiguration:newPageConfiguration];
 

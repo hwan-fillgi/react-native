@@ -11,7 +11,7 @@
 
 @implementation RCTConvert (PSPDFDocument)
 
-+ (PSPDFDocument *)PSPDFDocument:(NSString *)string {
++ (NSString *)PSPDFDocument:(NSString *)string {
   NSURL *url;
 
   if ([string hasPrefix:@"/"]) {
@@ -23,9 +23,9 @@
   NSString *fileExtension = url.pathExtension.lowercaseString;
   BOOL isImageFile = [fileExtension isEqualToString:@"png"] || [fileExtension isEqualToString:@"jpeg"] || [fileExtension isEqualToString:@"jpg"];
   if (isImageFile) {
-    return [[PSPDFImageDocument alloc] initWithImageURL:url];
+    return string;
   } else {
-    return [[PSPDFDocument alloc] initWithURL:url];
+    return string;
   }
 }
 
