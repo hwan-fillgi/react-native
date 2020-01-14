@@ -18,52 +18,92 @@
 
 @import PSPDFKit;
 @import PSPDFKitUI;
+@interface RCTPSPDFKitViewManager ()
+
+@property (nonatomic, retain) UIActivityIndicatorView *activityIndicator;
+
+@end
 
 @implementation RCTPSPDFKitViewManager
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _activityIndicator = [[UIActivityIndicatorView alloc] initWithFrame:CGRectMake(0, 0, 32, 32)];
+    }
+    return self;
+}
 
 RCT_EXPORT_MODULE()
 
 RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
   if (json) {
-    //view.pdfController.document = [RCTConvert PSPDFDocument:json];
-    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
-      
-    PSPDFDocument *documents = [[PSPDFDocument alloc] initWithURL:docURL];
-    PSPDFPageTemplate *externalDocumentPageTemplate = [[PSPDFPageTemplate alloc] initWithDocument:documents sourcePageIndex:0];
-    NSString *filename = [RCTConvert PSPDFDocument:json];
-    NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
-      
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    if ([fileManager fileExistsAtPath:filePath]){
-        //존재
-        NSLog(@"존재");
-        NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-        NSLog(@"file url %@", fileURL);
-        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-    } else{
-        //생성
-        NSLog(@"생성");
-        PSPDFDocumentEditor *documentEditor = [[PSPDFDocumentEditor alloc] init];
-        // Add the first page. At least one is needed to be able to save the document.
-        [documentEditor addPagesInRange:NSMakeRange(0, 1) withConfiguration:[PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
-            builder.pageSize = CGSizeMake(595, 842); // A4 in points
-        }]];
-        // Save to a new PDF file.
-        [documentEditor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
-            if (error) {
-                NSLog(@"Error saving document. Error: %@", error);
-            } else {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-                    view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                    UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-                    view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-                    NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-                });
-            }
-        }];
-    }
+      NSLog(@"document_id: %@", json);
+      NSDictionary *dictionary = [RCTConvert NSDictionary:json];
+      NSString *noteType = [dictionary objectForKey:@"noteType"];
+      NSString *noteTitle = [dictionary objectForKey:@"title"];
+      NSString *noteId = [dictionary objectForKey:@"noteId"];
+      NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", noteId, @".pdf"];
+      view.noteId = noteId;
+      view.noteType = noteType;
+      NSLog(@"pdfURL: %@", pdfURL);
+      if ([noteType isEqualToString:@"viewer"]) {
+                // Get the PDF Data from the url in a NSData Object
+                NSData *pdfData = [[NSData alloc] initWithContentsOfURL:[
+                NSURL URLWithString:pdfURL]];
+        
+                NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+        
+                NSString *filePath = [resourceDocPath
+                    stringByAppendingPathComponent:@"myPDF.pdf"];
+                [pdfData writeToFile:filePath atomically:YES];
+        
+                // Now create Request for the file that was saved in your documents folder
+                NSURL *url = [NSURL fileURLWithPath:filePath];
+          view.pdfController.document = [[PSPDFDocument alloc] initWithURL:url];
+          NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+      } else {
+          self.activityIndicator.hidden= FALSE;
+          [self.activityIndicator startAnimating];
+        //view.pdfController.document = [RCTConvert PSPDFDocument:json];
+
+        NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
+
+        PSPDFDocument *documents = [[PSPDFDocument alloc] initWithURL:docURL];
+        PSPDFPageTemplate *externalDocumentPageTemplate = [[PSPDFPageTemplate alloc] initWithDocument:documents sourcePageIndex:0];
+        NSString *filename = noteTitle;
+        NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
+
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        if ([fileManager fileExistsAtPath:filePath]){
+            // Now create Request for the file that was saved in your documents folder
+            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+        } else{
+            //생성
+            NSLog(@"생성");
+            PSPDFDocumentEditor *documentEditor = [[PSPDFDocumentEditor alloc] init];
+            // Add the first page. At least one is needed to be able to save the document.
+            [documentEditor addPagesInRange:NSMakeRange(0, 1) withConfiguration:[PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
+                builder.pageSize = CGSizeMake(595, 842); // A4 in points
+            }]];
+            // Save to a new PDF file.
+            [documentEditor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
+                if (error) {
+                    NSLog(@"Error saving document. Error: %@", error);
+                } else {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+                        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+                        view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+                        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+                    });
+                }
+            }];
+        }
+      }
+      // ProgressBar Start
 
     view.pdfController.document.delegate = (id<PSPDFDocumentDelegate>)view;
     
@@ -75,6 +115,20 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
 }
 
 RCT_REMAP_VIEW_PROPERTY(pageIndex, pdfController.pageIndex, NSUInteger)
+
+RCT_CUSTOM_VIEW_PROPERTY(noteId, NSString, RCTPSPDFKitView) {
+  if (json) {
+      NSLog(@"noteId: %@", json);
+      view.noteId = json;
+  }
+}
+
+RCT_CUSTOM_VIEW_PROPERTY(noteType, NSString, RCTPSPDFKitView) {
+  if (json) {
+      NSLog(@"noteType: %@", json);
+      view.noteType = json;
+  }
+}
 
 RCT_CUSTOM_VIEW_PROPERTY(configuration, PSPDFConfiguration, RCTPSPDFKitView) {
   if (json) {

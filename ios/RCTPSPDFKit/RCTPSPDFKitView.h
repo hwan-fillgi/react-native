@@ -36,6 +36,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) UIDocumentPickerViewController *filePickerController;
 @property (nonatomic, readonly) UIViewController *rootViewController;
 @property (readonly, nonatomic) PSPDFNewPageType pageType;
+@property (nonatomic, nullable) NSString *noteId;
+@property (nonatomic, nullable) NSString *noteType;
+@property (nonatomic, readonly) PSPDFWebViewController *webController;
 
 /// Annotation Toolbar
 - (BOOL)enterAnnotationCreationMode;

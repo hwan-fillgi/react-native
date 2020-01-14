@@ -15,11 +15,17 @@
 #import "RCTConvert+PSPDFViewMode.h"
 #import "RCTConvert+UIBarButtonItem.h"
 #import "PSCCustomUserInterfaceView.h"
+#import <AFNetworking/AFNetworking.h>
+#import <AWSCore/AWSCore.h>
+#import <AWSS3/AWSS3TransferUtility.h>
+#import <AWSCognito/AWSCognito.h>
+#import "UIImage+PDF.h"
 
 #define VALIDATE_DOCUMENT(document, ...) { if (!document.isValid) { NSLog(@"Document is invalid."); if (self.onDocumentLoadFailed) { self.onDocumentLoadFailed(@{@"error": @"Document is invalid."}); } return __VA_ARGS__; }}
 
 @interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate>
 
+@property (nonatomic, nullable) NSString *result;
 @property (nonatomic, nullable) UIViewController *controller;
 @property (nonatomic, nullable) NSNumber *mynumber;
 @property (nonatomic, nullable) UIViewController *topController;
@@ -32,20 +38,34 @@
 @property (nonatomic) PSPDFDocumentViewLayout *layout;
 @property (nonatomic) PSCCustomUserInterfaceView *customView;
 @property (nonatomic, nullable) PSPDFDocumentEditor *editor;
+@property (nonatomic, retain) UIActivityIndicatorView *activityIndicator;
 
 @end
 
 @implementation RCTPSPDFKitView
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
+    AWSCognitoCredentialsProvider *credentialsProvider = [[AWSCognitoCredentialsProvider alloc]
+       initWithRegionType:AWSRegionUSWest2
+       identityPoolId:@"us-west-2:ff7db21f-d7ea-4a9a-9ebe-5737bbc3e127"];
+
+    AWSServiceConfiguration *configuration = [[AWSServiceConfiguration alloc] initWithRegion:AWSRegionUSWest1 credentialsProvider:credentialsProvider];
+
+    [AWSServiceManager defaultServiceManager].defaultServiceConfiguration = configuration;
+    
+    _activityIndicator = [[UIActivityIndicatorView alloc] initWithFrame:CGRectMake(0, 0, 32, 32)];
     _browser = YES;
     _mainColor = [UIColor blackColor];
     _secondaryColor = [UIColor whiteColor];
+      _result = [[NSString alloc] init];
 
     // Navigation bar and toolbar customization. We're limiting appearance customization to instances that are
     // inside `PSPDFNavigationController` so that we don't affect the appearance of certain system controllers.
     _navBarProxy = [UINavigationBar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     _toolbarProxy = [UIToolbar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
+    NSURL *requestURL = [NSURL URLWithString:@"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/1577950286309Awe133616.pdf"];
+
+    _webController = [[PSPDFWebViewController alloc] initWithURL:requestURL];
       
     _pdfController = [[PSPDFViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
         [builder overrideClass:PSPDFUserInterfaceView.class withClass:PSCCustomUserInterfaceView.class];
@@ -56,7 +76,7 @@
     _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
     _addButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addDocuments:)];
     _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
-    _pageButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addPages:)];
+    _pageButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add-note"] style:UIBarButtonItemStylePlain target:self action:@selector(addPages:)];
       
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationChangedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsAddedNotification object:nil];
@@ -127,7 +147,6 @@
 
   UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, self.pdfController.view.frame.size.width / 2, 0.0, 0.0);
   self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-    
   self.topController = self.pdfController;
   self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];
 
@@ -154,10 +173,9 @@
   }
 }
 
-- (void)closeButtonPressed:(nullable id)sender {
+- (void)closeNote {
   if (self.onCloseButtonPressed) {
     self.onCloseButtonPressed(@{});
-    
   } else {
     // try to be smart and pop if we are not displayed modally.
     BOOL shouldDismiss = YES;
@@ -173,6 +191,139 @@
       [self.pdfController dismissViewControllerAnimated:YES completion:NULL];
     }
   }
+}
+
+- (void)closeButtonPressed:(nullable id)sender {
+  UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Save" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
+
+  UIAlertAction *ok = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+  {
+      [self.activityIndicator setCenter:self.center];
+      [self.activityIndicator setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleGray];
+      [self addSubview:self.activityIndicator];
+
+      // ProgressBar Start
+      self.activityIndicator.hidden= FALSE;
+      [self.activityIndicator startAnimating];
+      
+      PSPDFDocument *document = self.pdfController.document;
+      if (!document) return;
+      PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
+      if (!editor) return;
+      // Save and overwrite the document.
+      [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
+          if (error) {
+              NSLog(@"Document editing failed: %@", error);
+              return;
+          }
+          // Access the UI on the main thread.
+          dispatch_async(dispatch_get_main_queue(), ^{
+              //[self.pdfController reloadData];
+          });
+      }];
+      
+      NSLog(@"noteId: %@", self.noteId);
+      NSLog(@"ggggg: %@", self.pdfController.document.fileURL);
+      NSURL *fileURL = self.pdfController.document.fileURL;
+      NSString *uploadURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", self.noteId, @".pdf"];
+      NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", @"upload/", self.noteId, @".pdf"];
+      NSString *imageValue = [NSString stringWithFormat:@"%@%@%@", @"right_image/", self.noteId, @".png"];
+      NSString *imgValue = [NSString stringWithFormat:@"%@%@", self.noteId, @".png"];
+      
+      NSURL *url = [NSURL fileURLWithPath:self.pdfController.document.fileURL.path];
+
+//      UIImage *img = [ UIImage imageWithPDFURL:url atSize:CGSizeMake( 424, 600 ) atPage:0 ];
+//      UIImageView *imageView = [[UIImageView alloc] initWithImage:img];
+//      [self addSubview:imageView];
+//
+//      // Create path.
+//      NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+//      NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:imgValue];
+//      NSURL *rightImage = [[NSURL alloc] initFileURLWithPath:filePath];
+//      // Save image.
+//      [UIImagePNGRepresentation(img) writeToFile:filePath atomically:YES];
+      
+      
+      AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
+      expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
+          dispatch_async(dispatch_get_main_queue(), ^{
+              // Do something e.g. Update a progress bar.
+              NSLog(@"progressz");
+          });
+      };
+
+      AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
+              dispatch_async(dispatch_get_main_queue(), ^{
+                  NSLog(@"File upload completed");
+                  // 기본 구성에 URLSession 생성
+                  NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+                  NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+                  // request URL 설정
+                  NSURL *url = url = [NSURL URLWithString:@"https://lzlpcpj049.execute-api.us-west-1.amazonaws.com/prod/users/note"];
+                  NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
+
+                  // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+                  NSString *postParams = [NSString stringWithFormat:@"right_pdf=%@&note_id=%@", uploadURL, self.noteId];
+                  NSData *postData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+                  // 셋
+                  [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+                  [urlRequest setHTTPMethod:@"POST"];
+                  [urlRequest setHTTPBody:postData];
+
+                  // dataTask 생성
+                  NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                      if (data!=nil)
+                      {
+                          NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                          NSLog(@"result %@", [json objectForKey:@"result"]);
+                          self.result = [json objectForKey:@"result"];
+                          if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+
+                          }
+                      } else {
+                          NSLog(@"error");
+                      }
+                  }];
+                  [dataTask resume];
+
+                  [self.activityIndicator stopAnimating];
+                  self.activityIndicator.hidden= TRUE;
+                  [self closeNote];
+              });
+       };
+
+      AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
+
+      [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+          if (task.error) {
+              NSLog(@"Error: %@", task.error);
+          }
+          if (task.result) {
+              AWSS3TransferUtilityUploadTask *uploadTask = task.result;
+              // Do something with uploadTask.
+          }
+          return nil;
+      }];
+      
+//      [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+//          if (task.error) {
+//              NSLog(@"Error: %@", task.error);
+//          }
+//          if (task.result) {
+//              AWSS3TransferUtilityUploadTask *uploadTask = task.result;
+//              // Do something with uploadTask.
+//          }
+//          return nil;
+//      }];
+  }];
+  UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"No" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action){
+      [self closeNote];
+  }];
+  [alertController addAction:ok];
+  [alertController addAction:cancel];
+
+  [self.pdfController presentViewController:alertController animated:YES completion:nil];
 }
 
 - (void)addPages:(nullable id)sender {
@@ -520,8 +671,6 @@
           barButtonItem = _addButton;
       } else if([barButtonItemString isEqualToString:@"browserButtonItem"]) {
           barButtonItem = _browserButton;
-      } else if([barButtonItemString isEqualToString:@"pageButtonItem"]) {
-          barButtonItem = _pageButton;
       } else{
           barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
       }
@@ -541,6 +690,11 @@
   NSMutableArray *rightItems = [NSMutableArray array];
   for (NSString *barButtonItemString in items) {
     UIBarButtonItem *barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
+    if([barButtonItemString isEqualToString:@"pageButtonItem"]) {
+        barButtonItem = _pageButton;
+    } else{
+        barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
+    }
     if (barButtonItem && ![self.pdfController.navigationItem.leftBarButtonItems containsObject:barButtonItem]) {
       [rightItems addObject:barButtonItem];
     }
