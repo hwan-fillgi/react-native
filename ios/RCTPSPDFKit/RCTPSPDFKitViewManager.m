@@ -42,6 +42,7 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       NSString *noteType = [dictionary objectForKey:@"noteType"];
       NSString *noteTitle = [dictionary objectForKey:@"title"];
       NSString *noteId = [dictionary objectForKey:@"noteId"];
+      noteId = [noteId stringByReplacingOccurrencesOfString:@" " withString:@"%20"];
       NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", noteId, @".pdf"];
       view.noteId = noteId;
       view.noteType = noteType;

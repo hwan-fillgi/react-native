@@ -19,7 +19,7 @@
 #import <AWSCore/AWSCore.h>
 #import <AWSS3/AWSS3TransferUtility.h>
 #import <AWSCognito/AWSCognito.h>
-#import "UIImage+PDF.h"
+#import <PDFKit/PDFKit.h>
 
 #define VALIDATE_DOCUMENT(document, ...) { if (!document.isValid) { NSLog(@"Document is invalid."); if (self.onDocumentLoadFailed) { self.onDocumentLoadFailed(@{@"error": @"Document is invalid."}); } return __VA_ARGS__; }}
 
@@ -129,8 +129,8 @@
         self.navBarProxy.barStyle = UIBarStyleBlack;
     }
 
-    self.navBarProxy.tintColor = self.secondaryColor;
-    self.toolbarProxy.tintColor = self.secondaryColor;
+  self.navBarProxy.tintColor = self.secondaryColor;
+  self.toolbarProxy.tintColor = self.secondaryColor;
 
   self.controller = self.pspdf_parentViewController;
   if (self.controller == nil || self.window == nil || self.topController != nil) {
@@ -194,136 +194,139 @@
 }
 
 - (void)closeButtonPressed:(nullable id)sender {
-  UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Save" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
+    if ([self.noteType isEqualToString:@"viewer"]) {
+        [self closeNote];
+    } else{
+        UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Save" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
 
-  UIAlertAction *ok = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
-  {
-      [self.activityIndicator setCenter:self.center];
-      [self.activityIndicator setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleGray];
-      [self addSubview:self.activityIndicator];
+        UIAlertAction *ok = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+        {
+            [self.activityIndicator setCenter:self.center];
+            [self.activityIndicator setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleGray];
+            [self addSubview:self.activityIndicator];
 
-      // ProgressBar Start
-      self.activityIndicator.hidden= FALSE;
-      [self.activityIndicator startAnimating];
-      
-      PSPDFDocument *document = self.pdfController.document;
-      if (!document) return;
-      PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
-      if (!editor) return;
-      // Save and overwrite the document.
-      [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
-          if (error) {
-              NSLog(@"Document editing failed: %@", error);
-              return;
-          }
-          // Access the UI on the main thread.
-          dispatch_async(dispatch_get_main_queue(), ^{
-              //[self.pdfController reloadData];
-          });
-      }];
-      
-      NSLog(@"noteId: %@", self.noteId);
-      NSLog(@"ggggg: %@", self.pdfController.document.fileURL);
-      NSURL *fileURL = self.pdfController.document.fileURL;
-      NSString *uploadURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", self.noteId, @".pdf"];
-      NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", @"upload/", self.noteId, @".pdf"];
-      NSString *imageValue = [NSString stringWithFormat:@"%@%@%@", @"right_image/", self.noteId, @".png"];
-      NSString *imgValue = [NSString stringWithFormat:@"%@%@", self.noteId, @".png"];
-      
-      NSURL *url = [NSURL fileURLWithPath:self.pdfController.document.fileURL.path];
+            // ProgressBar Start
+            self.activityIndicator.hidden= FALSE;
+            [self.activityIndicator startAnimating];
+            
+            PSPDFDocument *document = self.pdfController.document;
+            if (!document) return;
+            PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
+            if (!editor) return;
+            
+            // Save and overwrite the document.
+            [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
+                if (error) {
+                    NSLog(@"Document editing failed: %@", error);
+                    return;
+                }
+                // Access the UI on the main thread.
+                dispatch_async(dispatch_get_main_queue(), ^{
+                });
+            }];
+            
+            NSLog(@"noteId: %@", self.noteId);
+            NSLog(@"ggggg: %@", self.pdfController.document.fileURL);
+            NSURL *fileURL = self.pdfController.document.fileURL;
+            NSString *uploadURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", self.noteId, @".pdf"];
+            NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", @"upload/", self.noteId, @".pdf"];
+            NSString *imageValue = [NSString stringWithFormat:@"%@%@%@", @"right_image/", self.noteId, @".png"];
+            NSString *imgValue = [NSString stringWithFormat:@"%@%@", self.noteId, @".png"];
 
-//      UIImage *img = [ UIImage imageWithPDFURL:url atSize:CGSizeMake( 424, 600 ) atPage:0 ];
-//      UIImageView *imageView = [[UIImageView alloc] initWithImage:img];
-//      [self addSubview:imageView];
-//
-//      // Create path.
-//      NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-//      NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:imgValue];
-//      NSURL *rightImage = [[NSURL alloc] initFileURLWithPath:filePath];
-//      // Save image.
-//      [UIImagePNGRepresentation(img) writeToFile:filePath atomically:YES];
-      
-      
-      AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
-      expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
-          dispatch_async(dispatch_get_main_queue(), ^{
-              // Do something e.g. Update a progress bar.
-              NSLog(@"progressz");
-          });
-      };
+            PDFView * pdfView = [[PDFView alloc] initWithFrame : CGRectMake(0, 0, 424, 600)];
+            pdfView.document = [[PDFDocument alloc] initWithURL : [NSURL fileURLWithPath : document.fileURL.path]];
+            
+            UIImage *thumbnailImage = [[pdfView.document pageAtIndex:0] thumbnailOfSize:CGSizeMake(424, 600) forBox:kPDFDisplayBoxMediaBox];
+            
+            // Create path.
+            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+            NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:imgValue];
+            NSURL *rightImage = [[NSURL alloc] initFileURLWithPath:filePath];
+            // Save image.
+            [UIImagePNGRepresentation(thumbnailImage) writeToFile:filePath atomically:YES];
+            
+            
+            AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
+            expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    // Do something e.g. Update a progress bar.
+                    NSLog(@"progressz");
+                });
+            };
 
-      AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
-              dispatch_async(dispatch_get_main_queue(), ^{
-                  NSLog(@"File upload completed");
-                  // 기본 구성에 URLSession 생성
-                  NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-                  NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
-                  // request URL 설정
-                  NSURL *url = url = [NSURL URLWithString:@"https://lzlpcpj049.execute-api.us-west-1.amazonaws.com/prod/users/note"];
-                  NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
+            AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        NSLog(@"File upload completed");
+                        // 기본 구성에 URLSession 생성
+                        NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+                        NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+                        // request URL 설정
+                        NSURL *url = url = [NSURL URLWithString:@"https://lzlpcpj049.execute-api.us-west-1.amazonaws.com/prod/users/note"];
+                        NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
 
-                  // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
-                  NSString *postParams = [NSString stringWithFormat:@"right_pdf=%@&note_id=%@", uploadURL, self.noteId];
-                  NSData *postData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+                        // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+                        NSString *postParams = [NSString stringWithFormat:@"right_pdf=%@&note_id=%@", uploadURL, self.noteId];
+                        NSData *postData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
 
-                  // 셋
-                  [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
-                  [urlRequest setHTTPMethod:@"POST"];
-                  [urlRequest setHTTPBody:postData];
+                        // 셋
+                        [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+                        [urlRequest setHTTPMethod:@"POST"];
+                        [urlRequest setHTTPBody:postData];
 
-                  // dataTask 생성
-                  NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-                      if (data!=nil)
-                      {
-                          NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-                          NSLog(@"result %@", [json objectForKey:@"result"]);
-                          self.result = [json objectForKey:@"result"];
-                          if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                        // dataTask 생성
+                        NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                            if (data!=nil)
+                            {
+                                NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                                NSLog(@"result %@", [json objectForKey:@"result"]);
+                                self.result = [json objectForKey:@"result"];
+                                if([[json objectForKey:@"result"] isEqualToString:@"success"]){
 
-                          }
-                      } else {
-                          NSLog(@"error");
-                      }
-                  }];
-                  [dataTask resume];
+                                }
+                            } else {
+                                NSLog(@"error");
+                            }
+                        }];
+                        [dataTask resume];
 
-                  [self.activityIndicator stopAnimating];
-                  self.activityIndicator.hidden= TRUE;
-                  [self closeNote];
-              });
-       };
+                        [self.activityIndicator stopAnimating];
+                        self.activityIndicator.hidden= TRUE;
+                        [self closeNote];
+                    });
+             };
 
-      AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
+            AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
 
-      [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-          if (task.error) {
-              NSLog(@"Error: %@", task.error);
-          }
-          if (task.result) {
-              AWSS3TransferUtilityUploadTask *uploadTask = task.result;
-              // Do something with uploadTask.
-          }
-          return nil;
-      }];
-      
-//      [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-//          if (task.error) {
-//              NSLog(@"Error: %@", task.error);
-//          }
-//          if (task.result) {
-//              AWSS3TransferUtilityUploadTask *uploadTask = task.result;
-//              // Do something with uploadTask.
-//          }
-//          return nil;
-//      }];
-  }];
-  UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"No" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action){
-      [self closeNote];
-  }];
-  [alertController addAction:ok];
-  [alertController addAction:cancel];
+            [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+                if (task.error) {
+                    NSLog(@"Error: %@", task.error);
+                }
+                if (task.result) {
+                    AWSS3TransferUtilityUploadTask *uploadTask = task.result;
+                    // Do something with uploadTask.
+                }
+                return nil;
+            }];
+            
+            [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+                if (task.error) {
+                    NSLog(@"Error: %@", task.error);
+                }
+                if (task.result) {
+                    AWSS3TransferUtilityUploadTask *uploadTask = task.result;
+                    // Do something with uploadTask.
+                }
+                return nil;
+            }];
+        }];
+        UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"No" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action){
+            [self closeNote];
+        }];
+        [alertController addAction:ok];
+        [alertController addAction:cancel];
 
-  [self.pdfController presentViewController:alertController animated:YES completion:nil];
+        [self.pdfController presentViewController:alertController animated:YES completion:nil];
+    }
 }
 
 - (void)addPages:(nullable id)sender {
