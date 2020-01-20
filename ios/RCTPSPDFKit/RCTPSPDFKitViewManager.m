@@ -48,23 +48,22 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       view.noteType = noteType;
       NSLog(@"pdfURL: %@", pdfURL);
       if ([noteType isEqualToString:@"viewer"]) {
-                // Get the PDF Data from the url in a NSData Object
-                NSData *pdfData = [[NSData alloc] initWithContentsOfURL:[
-                NSURL URLWithString:pdfURL]];
+        // Get the PDF Data from the url in a NSData Object
+        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:[
+        NSURL URLWithString:pdfURL]];
         
-                NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+        NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
         
-                NSString *filePath = [resourceDocPath
-                    stringByAppendingPathComponent:@"myPDF.pdf"];
-                [pdfData writeToFile:filePath atomically:YES];
+        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:@"myPDF.pdf"];
+        [pdfData writeToFile:filePath atomically:YES];
         
-                // Now create Request for the file that was saved in your documents folder
-                NSURL *url = [NSURL fileURLWithPath:filePath];
-          view.pdfController.document = [[PSPDFDocument alloc] initWithURL:url];
-          NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+        // Now create Request for the file that was saved in your documents folder
+        NSURL *url = [NSURL fileURLWithPath:filePath];
+        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:url];
+        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
       } else {
-          self.activityIndicator.hidden= FALSE;
-          [self.activityIndicator startAnimating];
+        self.activityIndicator.hidden= FALSE;
+        [self.activityIndicator startAnimating];
         //view.pdfController.document = [RCTConvert PSPDFDocument:json];
 
         NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];

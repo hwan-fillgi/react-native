@@ -25,20 +25,24 @@
           PSPDFAnnotationGroupItemConfigurationBlock configurationBlock = ^UIImage *(PSPDFAnnotationGroupItem *item, id container, UIColor *tintColor){
               return [[RCTConvert configureBlockImage:subItem] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
           };
-          [subItems addObject:[PSPDFAnnotationGroupItem itemWithType:annotationString variant:@"" configurationBlock:configurationBlock]];
+          [subItems addObject:[PSPDFAnnotationGroupItem itemWithType:annotationString variant:annotationString configurationBlock:configurationBlock]];
           //[subItems addObject:[PSPDFAnnotationGroupItem itemWithType:annotationString]];
         }
       }
       [parsedItems addObject:[PSPDFAnnotationGroup groupWithItems:subItems]];
     } else {
-        NSLog(@"aaaaa: %@",itemToParse);
       PSPDFAnnotationString annotationString = [RCTConvert PSPDFAnnotationStringFromName:itemToParse];
-        NSLog(@"aaaaa: %@",annotationString);
       if (annotationString) {
+        if ([itemToParse isEqualToString:@"highlighter"]) {
+            PSPDFAnnotationGroupItemConfigurationBlock configurationBlock = ^UIImage *(PSPDFAnnotationGroupItem *item, id container, UIColor *tintColor){
+            return [[RCTConvert configureBlockImage:@"highlighter"] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
+            };
+            [parsedItems addObject:[PSPDFAnnotationGroup groupWithItems:@[[PSPDFAnnotationGroupItem itemWithType:PSPDFAnnotationStringInk variant:PSPDFAnnotationVariantStringInkHighlighter configurationBlock:configurationBlock]]]];
+        }
         PSPDFAnnotationGroupItemConfigurationBlock configurationBlock = ^UIImage *(PSPDFAnnotationGroupItem *item, id container, UIColor *tintColor){
             return [[RCTConvert configureBlockImage:itemToParse] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
         };
-        [parsedItems addObject:[PSPDFAnnotationGroup groupWithItems:@[[PSPDFAnnotationGroupItem itemWithType:annotationString variant:@"" configurationBlock:configurationBlock]]]];
+        [parsedItems addObject:[PSPDFAnnotationGroup groupWithItems:@[[PSPDFAnnotationGroupItem itemWithType:annotationString variant:annotationString configurationBlock:configurationBlock]]]];
       }
     }
   }
@@ -46,7 +50,6 @@
 }
 
 + (UIImage *)configureBlockImage:(NSString *)name {
-    NSLog(@"aa: %@",name);
     UIImage *image;
     if([name isEqualToString:@"link"]){
         image = [PSPDFKitGlobal imageNamed:@"icon_pen"];

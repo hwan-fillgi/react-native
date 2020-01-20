@@ -193,6 +193,26 @@
   }
 }
 
+//- (BOOL)removeAnnotationWithUUID:(NSString *)savaImage {
+//  PSPDFDocument *document = self.pdfController.document;
+//  VALIDATE_DOCUMENT(document, NO)
+//  BOOL success = NO;
+//
+//  NSArray<PSPDFAnnotation *> *allAnnotations = [[document allAnnotationsOfType:PSPDFAnnotationTypeAll].allValues valueForKeyPath:@"@unionOfArrays.self"];
+//  for (PSPDFAnnotation *annotation in allAnnotations) {
+//    // Remove the annotation if the uuids match.
+//    if ([annotation.uuid isEqualToString:annotationUUID]) {
+//      success = [document removeAnnotations:@[annotation] options:nil];
+//      break;
+//    }
+//  }
+//
+//  if (!success) {
+//    NSLog(@"Failed to remove annotation.");
+//  }
+//  return success;
+//}
+
 - (void)closeButtonPressed:(nullable id)sender {
     if ([self.noteType isEqualToString:@"viewer"]) {
         [self closeNote];
@@ -214,17 +234,6 @@
             PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
             if (!editor) return;
             
-            // Save and overwrite the document.
-            [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
-                if (error) {
-                    NSLog(@"Document editing failed: %@", error);
-                    return;
-                }
-                // Access the UI on the main thread.
-                dispatch_async(dispatch_get_main_queue(), ^{
-                });
-            }];
-            
             NSLog(@"noteId: %@", self.noteId);
             NSLog(@"ggggg: %@", self.pdfController.document.fileURL);
             NSURL *fileURL = self.pdfController.document.fileURL;
@@ -232,19 +241,11 @@
             NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", @"upload/", self.noteId, @".pdf"];
             NSString *imageValue = [NSString stringWithFormat:@"%@%@%@", @"right_image/", self.noteId, @".png"];
             NSString *imgValue = [NSString stringWithFormat:@"%@%@", self.noteId, @".png"];
-
-            PDFView * pdfView = [[PDFView alloc] initWithFrame : CGRectMake(0, 0, 424, 600)];
-            pdfView.document = [[PDFDocument alloc] initWithURL : [NSURL fileURLWithPath : document.fileURL.path]];
-            
-            UIImage *thumbnailImage = [[pdfView.document pageAtIndex:0] thumbnailOfSize:CGSizeMake(424, 600) forBox:kPDFDisplayBoxMediaBox];
             
             // Create path.
             NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
             NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:imgValue];
             NSURL *rightImage = [[NSURL alloc] initFileURLWithPath:filePath];
-            // Save image.
-            [UIImagePNGRepresentation(thumbnailImage) writeToFile:filePath atomically:YES];
-            
             
             AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
             expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
@@ -296,27 +297,46 @@
              };
 
             AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
-
-            [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-                if (task.error) {
-                    NSLog(@"Error: %@", task.error);
-                }
-                if (task.result) {
-                    AWSS3TransferUtilityUploadTask *uploadTask = task.result;
-                    // Do something with uploadTask.
-                }
-                return nil;
-            }];
             
-            [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-                if (task.error) {
-                    NSLog(@"Error: %@", task.error);
+            // Save and overwrite the document.
+            [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
+                if (error) {
+                    NSLog(@"Document editing failed: %@", error);
+                    return;
                 }
-                if (task.result) {
-                    AWSS3TransferUtilityUploadTask *uploadTask = task.result;
-                    // Do something with uploadTask.
-                }
-                return nil;
+                // Access the UI on the main thread.
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    PDFView * pdfView = [[PDFView alloc] initWithFrame : CGRectMake(0, 0, 424, 600)];
+                    pdfView.document = [[PDFDocument alloc] initWithURL : [NSURL fileURLWithPath : savedDocument.fileURL.path]];
+                    
+                    UIImage *thumbnailImage = [[pdfView.document pageAtIndex:0] thumbnailOfSize:CGSizeMake(424, 600) forBox:kPDFDisplayBoxMediaBox];
+                    // Save image.
+                    if ([UIImagePNGRepresentation(thumbnailImage) writeToFile:filePath atomically:YES]) {
+                        NSLog(@"Success");
+                        [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+                            if (task.error) {
+                                NSLog(@"Error: %@", task.error);
+                            }
+                            if (task.result) {
+                                // Do something with uploadTask.
+                            }
+                            return nil;
+                        }];
+                        
+                        [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+                            if (task.error) {
+                                NSLog(@"Error: %@", task.error);
+                            }
+                            if (task.result) {
+                                // Do something with uploadTask.
+                            }
+                            return nil;
+                        }];
+                    }
+                    else{
+                        NSLog(@"Error");
+                    }
+                });
             }];
         }];
         UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"No" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action){
