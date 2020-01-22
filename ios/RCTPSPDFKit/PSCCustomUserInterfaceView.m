@@ -77,12 +77,35 @@
                     if (self.jsonArray) {
                         for (int i = 0; i < self.jsonArray.count; i++) {
                             NSLog(@"json array %@", [self.jsonArray objectAtIndex:i]);
-                            NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-                            NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[self.jsonArray objectAtIndex:i]];
-                            NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-                            PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                            [self.saveFile addObject:[self.jsonArray objectAtIndex:i]];
-                            [self.documents addObject:document];
+                            if ([[self.jsonArray objectAtIndex:i] isEqualToString:@"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/note_guide_0114(add highlighter).pdf"]) {
+                                NSFileManager *fileManager = [NSFileManager defaultManager];
+                                
+                                NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note_guide_0114(add highlighter)" withExtension:@"pdf"];
+                                NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+
+                                NSString *filePath = [resourceDocPath stringByAppendingPathComponent:@"note_guide_0114(add highlighter).pdf"];
+                                NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+                                NSError *err = [[NSError alloc] init];
+                                if ([fileManager fileExistsAtPath:filePath]){
+                                    PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                                    [self.saveFile addObject:@"note_guide_0114(add highlighter).pdf"];
+                                    [self.documents addObject:document];
+                                } else{
+                                    BOOL result = [[NSFileManager defaultManager] copyItemAtPath:docURL.path toPath:filePath error:&err];
+                                    if (result) {
+                                        PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                                        [self.saveFile addObject:@"note_guide_0114(add highlighter).pdf"];
+                                        [self.documents addObject:document];
+                                    }
+                                }
+                            } else {
+                                NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+                                NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[self.jsonArray objectAtIndex:i]];
+                                NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+                                PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                                [self.saveFile addObject:[self.jsonArray objectAtIndex:i]];
+                                [self.documents addObject:document];
+                            }
                         }
                         NSLog(@"self.documents %@",  self.documents);
                         self.tabController.documents = [self.documents copy];
