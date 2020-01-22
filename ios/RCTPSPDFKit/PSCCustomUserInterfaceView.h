@@ -14,7 +14,9 @@
 @property (nonatomic, readonly) UIDocumentBrowserViewController *fileController;
 @property (nonatomic, readonly) UIDocumentPickerViewController *filePickerController;
 @property (nonatomic, readonly) UIViewController *rootViewController;
+@property (nonatomic, strong) NSMutableArray *documents;
+@property (nonatomic, nullable) NSString *noteId;
 
-- (void)addDocuments:(PSPDFDocument *)document;
-
+-(void)saveDocuments:(NSString *)noti;
 @end
+

@@ -15,6 +15,7 @@
 #import "RCTConvert+PSPDFViewMode.h"
 #import "RCTPSPDFKitView.h"
 #import <React/RCTUIManager.h>
+#import "PSCCustomUserInterfaceView.h"
 
 @import PSPDFKit;
 @import PSPDFKitUI;
@@ -25,10 +26,30 @@
 @end
 
 @implementation RCTPSPDFKitViewManager
-- (instancetype)init {
+
++(RCTPSPDFKitViewManager *) theSettingsData
+
+{
+    static RCTPSPDFKitViewManager *theSettingsData = nil;
+    if (!theSettingsData) {
+        theSettingsData = [[super allocWithZone:nil] init];
+    }
+    return theSettingsData;
+
+}
++(id) allocWithZone:(NSZone *)zone
+
+{
+
+    return [self theSettingsData];
+
+}
+
+-(id) init
+{
     self = [super init];
     if (self) {
-        _activityIndicator = [[UIActivityIndicatorView alloc] initWithFrame:CGRectMake(0, 0, 32, 32)];
+        _outSampleRate = 44100;
     }
     return self;
 }
@@ -37,7 +58,6 @@ RCT_EXPORT_MODULE()
 
 RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
   if (json) {
-      NSLog(@"document_id: %@", json);
       NSDictionary *dictionary = [RCTConvert NSDictionary:json];
       NSString *noteType = [dictionary objectForKey:@"noteType"];
       NSString *noteTitle = [dictionary objectForKey:@"title"];
@@ -46,11 +66,14 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", noteId, @".pdf"];
       view.noteId = noteId;
       view.noteType = noteType;
-      NSLog(@"pdfURL: %@", pdfURL);
+      _version = noteId;
+      NSDictionary *notiDic=nil;
+      notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:noteId,@"pla", nil];
+      [[NSNotificationCenter defaultCenter]postNotificationName:@"setPla" object:nil userInfo:notiDic];
+      
       if ([noteType isEqualToString:@"viewer"]) {
         // Get the PDF Data from the url in a NSData Object
-        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:[
-        NSURL URLWithString:pdfURL]];
+        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:[NSURL URLWithString:pdfURL]];
         
         NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
         
@@ -103,10 +126,9 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
             }];
         }
       }
-      // ProgressBar Start
-
+      
     view.pdfController.document.delegate = (id<PSPDFDocumentDelegate>)view;
-    
+      
     // The author name may be set before the document exists. We set it again here when the document exists.
     if (view.annotationAuthorName) {
       view.pdfController.document.defaultAnnotationUsername = view.annotationAuthorName;

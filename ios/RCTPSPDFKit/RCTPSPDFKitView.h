@@ -9,6 +9,7 @@
 
 #import <UIKit/UIKit.h>
 #import <React/RCTComponent.h>
+#import "PSCCustomUserInterfaceView.h"
 
 @import PSPDFKit;
 @import PSPDFKitUI;
@@ -17,12 +18,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface RCTPSPDFKitView: UIView
 
-@property (nonatomic, readonly) PSPDFViewController *pdfController;
+@property (nonatomic, retain) PSPDFViewController *pdfController;
 @property (nonatomic) BOOL hideNavigationBar;
-@property (nonatomic, readonly) UIBarButtonItem *closeButton;
-@property (nonatomic, readonly) UIBarButtonItem *addButton;
-@property (nonatomic, readonly) UIBarButtonItem *browserButton;
-@property (nonatomic, readonly) UIBarButtonItem *pageButton;
+@property (nonatomic, retain) UIBarButtonItem *closeButton;
+@property (nonatomic, retain) UIBarButtonItem *addButton;
+@property (nonatomic, retain) UIBarButtonItem *browserButton;
+@property (nonatomic, retain) UIBarButtonItem *pageButton;
 @property (nonatomic) BOOL disableDefaultActionForTappedAnnotations;
 @property (nonatomic) BOOL disableAutomaticSaving;
 @property (nonatomic, copy, nullable) NSString *annotationAuthorName;
@@ -33,12 +34,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) RCTBubblingEventBlock onAnnotationTapped;
 @property (nonatomic, copy) RCTBubblingEventBlock onAnnotationsChanged;
 @property (nonatomic, copy) RCTBubblingEventBlock onStateChanged;
-@property (nonatomic, readonly) UIDocumentPickerViewController *filePickerController;
-@property (nonatomic, readonly) UIViewController *rootViewController;
+@property (nonatomic, retain) UIDocumentPickerViewController *filePickerController;
+@property (nonatomic, retain) UIViewController *rootViewController;
 @property (readonly, nonatomic) PSPDFNewPageType pageType;
-@property (nonatomic, nullable) NSString *noteId;
-@property (nonatomic, nullable) NSString *noteType;
-@property (nonatomic, readonly) PSPDFWebViewController *webController;
+@property (nonatomic, retain) NSString *noteId;
+@property (nonatomic, retain) NSString *noteType;
+@property (nonatomic, retain) PSPDFWebViewController *webController;
+@property (nonatomic, nullable) NSMutableArray *documents;
+@property (nonatomic, nullable) PSCCustomUserInterfaceView *customView;
 
 /// Annotation Toolbar
 - (BOOL)enterAnnotationCreationMode;

@@ -5,23 +5,25 @@
 #import "RCTConvert+PSPDFViewMode.h"
 #import "RCTConvert+UIBarButtonItem.h"
 #import "RCTConvert+PSPDFConfiguration.h"
+#import "RCTPSPDFKitViewManager.h"
 
 @interface PSCCustomUserInterfaceView ()
 
 @property (nonatomic, nullable) PSPDFDocument *document;
-@property (nonatomic, strong) NSMutableArray *documents;
 @property (nonatomic, strong) UINavigationController *selectDocumentsNavController;
-@property (nonatomic, strong) NSString *currentItem;
+@property (nonatomic, strong) NSMutableArray *saveFile;
 @property (nonatomic, nullable) NSNumber *mynumber;
+@property (nonatomic, nullable) NSArray* jsonArray;
 
 @end
 
 @implementation PSCCustomUserInterfaceView
 - (instancetype)initWithFrame:(CGRect)frame {
-    
   if ((self = [super initWithFrame:frame])) {
-    
+    NSString *mVersion = [[RCTPSPDFKitViewManager theSettingsData] version]; // 값 읽기
+    NSLog(@"mVersion %@", mVersion);
     _documents = [NSMutableArray new];
+    _saveFile = [NSMutableArray new];
     
     _rootViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
       
@@ -32,11 +34,7 @@
     _selectDocumentsNavController = [[UINavigationController alloc] initWithRootViewController:self.filePickerController];
       
     NSURL *requestURL = [NSURL URLWithString:@"https://www.google.co.kr/"];
-    //NSURL *baseURL = [NSBundle.mainBundle URLForResource:@"youtube2" withExtension:@"html"];
-    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"Sample" withExtension:@"pdf"];
-
-    //NSString *html = requestURL.parameterString;
-
+      
     _webController = [[PSPDFWebViewController alloc] initWithURL:requestURL];
 
     _tabController = [[PSPDFTabbedViewController alloc] init];
@@ -50,7 +48,55 @@
         builder.pageLabelEnabled = NO;
         builder.documentLabelEnabled = NO;
     }];
+      
+    NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"http://192.168.0.31:3000/users/left", mVersion];
 
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
+      [request setURL:[NSURL URLWithString:getURL]];
+      [request setHTTPMethod:@"GET"];
+
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
+    [[session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (data!=nil) {
+                NSDictionary* json = [NSJSONSerialization
+                                      JSONObjectWithData:data
+                                      options:kNilOptions
+                                      error:&error];
+            NSLog(@"json %@", json);
+            NSString *left_pdf = [[json objectForKey:@"classes"] objectForKey:@"left_pdf"];
+            NSLog(@"left_pdf %@", left_pdf);
+            if (left_pdf == nil || [left_pdf isEqual:[NSNull null]]) {
+            } else {
+                NSError *error = NULL;
+                NSData* data = [left_pdf dataUsingEncoding:NSUTF8StringEncoding];
+                self.jsonArray = [NSJSONSerialization
+                                                  JSONObjectWithData:data
+                                                  options:kNilOptions
+                                                  error:&error];
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    if (self.jsonArray) {
+                        for (int i = 0; i < self.jsonArray.count; i++) {
+                            NSLog(@"json array %@", [self.jsonArray objectAtIndex:i]);
+                            NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+                            NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[self.jsonArray objectAtIndex:i]];
+                            NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+                            PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                            [self.saveFile addObject:[self.jsonArray objectAtIndex:i]];
+                            [self.documents addObject:document];
+                        }
+                        NSLog(@"self.documents %@",  self.documents);
+                        self.tabController.documents = [self.documents copy];
+                        [self saveDocuments:self.documents];
+                    }
+                });
+            }
+
+        } else {
+            NSLog(@"error");
+        }
+        //[self loadDocuments:self.jsonArray];
+    }] resume];
+    
     _navigationController = [[UINavigationController alloc] initWithRootViewController:self.tabController];
     _navigationController.view.translatesAutoresizingMaskIntoConstraints = NO;
     _navigationController.navigationBarHidden = true;
@@ -76,6 +122,7 @@
         ]];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTim:) name:@"setPlaytims" object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTi:) name:@"setPlaytis" object:nil];
+
   }
   return self;
 }
@@ -90,7 +137,6 @@
         @[[self.navigationController.view.trailingAnchor constraintEqualToAnchor:recognizer.view.centerXAnchor]
         ]];
     [recognizer setTranslation:CGPointZero inView:self];
-    NSLog(@"asd: %f", translation.x);
     
     double f1 = recognizer.view.center.x + translation.x;
     NSNumber* num1 = [NSNumber numberWithDouble:f1];
@@ -99,41 +145,86 @@
     [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
 }
 
+// 파일선택
 #pragma mark - iCloud files
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     // 파일경로 저장
     if (controller.documentPickerMode == UIDocumentPickerModeImport) {
         NSString *filename = url.lastPathComponent;
-        NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
+        NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:filename];
+        //NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
         NSError *err = [[NSError alloc] init];
+        // Now create Request for the file that was saved in your documents folder
+        NSURL *url = [NSURL fileURLWithPath:filePath];
+        
         if ([fileManager fileExistsAtPath:filePath]){
-            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+            NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+            NSLog(@"file exist. %@", fileURL);
             PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-            [self.documents addObject:document];
-            self.tabController.documents = [self.documents copy];
+            if (self.tabController.documents.count == 0) {
+                [self.saveFile addObject:filename];
+                [self.documents addObject:document];
+                self.tabController.documents = [self.documents copy];
+                [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+            } else {
+                Boolean sameFlag = NO;
+                for (int i = 0; i < self.tabController.documents.count; i++) {
+                    if ([document.UID isEqualToString:self.tabController.documents[i].UID]) {
+                        sameFlag = YES;
+                    }
+                }
+                if (sameFlag == NO) {
+                    [self.saveFile addObject:filename];
+                    [self.documents addObject:document];
+                    self.tabController.documents = [self.documents copy];
+                    [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+                }
+            }
         } else{
             BOOL result = [[NSFileManager defaultManager] copyItemAtPath:url.path toPath:filePath error:&err];
             if (result) {
                 NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
                 PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                [self.documents addObject:document];
-                self.tabController.documents = [self.documents copy];
+                if (self.tabController.documents.count == 0) {
+                    [self.saveFile addObject:filename];
+                    [self.documents addObject:document];
+                    self.tabController.documents = [self.documents copy];
+                    [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+                } else {
+                    Boolean sameFlag = NO;
+                    for (int i = 0; i < self.tabController.documents.count; i++) {
+                        if ([document.UID isEqualToString:self.tabController.documents[i].UID]) {
+                            sameFlag = YES;
+                        }
+                    }
+                    if (sameFlag == NO) {
+                        [self.saveFile addObject:filename];
+                        [self.documents addObject:document];
+                        self.tabController.documents = [self.documents copy];
+                        [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+                    }
+                }
             }
             else {
                 NSLog(@"Import failed. %@", err.localizedDescription);
             }
         }
+        [self saveDocuments:self.documents];
     }
+}
+
+-(void)saveDocuments:(NSMutableArray *)noti{
+    [self.tabController setNeedsFocusUpdate];
+    NSLog(@"document save %@", self.tabController.documents);
+    NSDictionary *notiDic=nil;
+    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:self.saveFile,@"play", nil];
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlay" object:nil userInfo:notiDic];
 }
 
 - (void)updateScrubberBarFrameAnimated:(BOOL)animated {
     [super updateScrubberBarFrameAnimated:animated];
-
-    // Stick scrubber bar to the top.
-//    CGRect newFrame = self.dataSource.contentRect;
-//    newFrame.size.height = 44.f;
-//    self.scrubberBar.frame = newFrame;
 }
 
 - (void)updateThumbnailBarFrameAnimated:(BOOL)animated {
@@ -162,41 +253,14 @@
   }
 }
 
-//- (void)presentTabs:(CDVInvokedUrlCommand *)command {
-//    NSArray *paths = [command argumentAtIndex:0];
-//
-//    PSPDFTabbedViewController *tabbedViewController = [[PSPDFTabbedViewController alloc] init];
-////    NSMutableArray *documents = [NSMutableArray new];
-//    for (NSString *path in paths) {
-//        PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:[self fileURLWithPath:path]];
-//        if (document) {
-//            [documents addObject:document];
-//        }
-//    }
-//    tabbedViewController.documents = [documents copy];
-//    _navigationController = [[UINavigationController alloc] initWithRootViewController:tabbedViewController];
-//
-//    if (!_navigationController.presentingViewController) {
-//        [self.viewController presentViewController:_navigationController animated:YES completion:^{
-//
-//            [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_OK]
-//                                        callbackId:command.callbackId];
-//        }];
-//    } else {
-//        [self.commandDelegate sendPluginResult:[CDVPluginResult resultWithStatus:CDVCommandStatus_ERROR]
-//                                    callbackId:command.callbackId];
-//    }
-//}
 -(void)setPlayTim:(NSNotification *)noti{
     NSDictionary *notiDic=[noti userInfo];
     self.mynumber = [notiDic objectForKey:@"playTim"];
-    double i = [self.mynumber doubleValue];
-    
     self.selectDocumentsNavController.navigationBarHidden = YES;
     self.selectDocumentsNavController.modalPresentationStyle = UIModalPresentationFormSheet;
     self.selectDocumentsNavController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
-
-    [self.rootViewController presentViewController:self.selectDocumentsNavController animated:YES completion:nil];
+    
+    [self.navigationController presentViewController:self.selectDocumentsNavController animated:YES completion:nil];
 }
 
 -(void)setPlayTi:(NSNotification *)noti{
@@ -214,18 +278,6 @@
             //NSLog(@"finally");
         }
     } else if (i == 2) {
-//        _tabController = [[PSPDFTabbedViewController alloc] init];
-//        [self.tabController.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
-//            builder.pageMode = PSPDFPageModeSingle;
-//            builder.scrollDirection = PSPDFScrollDirectionVertical;
-//            builder.pageTransition = PSPDFPageTransitionScrollContinuous;
-//            builder.userInterfaceViewMode = PSPDFUserInterfaceViewModeAlways;
-//            builder.spreadFitting = PSPDFConfigurationSpreadFittingFill;
-//            builder.pageLabelEnabled = NO;
-//            builder.documentLabelEnabled = NO;
-//        }];
-//        self.tabController.documents = [self.documents copy];
-       // [self.navigationController pushViewController:self.tabController animated:NO];
         @try {
            [self.navigationController pushViewController:self.tabController animated:NO];
         } @catch (NSException * e) {
@@ -236,4 +288,24 @@
         }
     }
 }
+
+- (NSString *) getDataFrom:(NSString *)url{
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
+    [request setHTTPMethod:@"GET"];
+    [request setURL:[NSURL URLWithString:url]];
+
+    NSError *error = nil;
+    NSHTTPURLResponse *responseCode = nil;
+
+    NSData *oResponseData = [NSURLConnection sendSynchronousRequest:request returningResponse:&responseCode error:&error];
+
+    if([responseCode statusCode] != 200){
+        NSLog(@"Error getting %@, HTTP status code %i", url, [responseCode statusCode]);
+        return nil;
+    }
+
+    return [[NSString alloc] initWithData:oResponseData encoding:NSUTF8StringEncoding];
+}
+
+
 @end

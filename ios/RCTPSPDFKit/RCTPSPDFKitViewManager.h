@@ -11,4 +11,13 @@
 
 @interface RCTPSPDFKitViewManager : RCTViewManager
 
+@property(nonatomic, strong) NSString *version;
+
+@property(nonatomic, assign) NSInteger outSampleRate;
+
+ 
+
++(RCTPSPDFKitViewManager *) theSettingsData;
+
 @end
+
