@@ -49,7 +49,7 @@
         builder.documentLabelEnabled = NO;
     }];
       
-    NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"http://192.168.0.31:3000/users/left", mVersion];
+    NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"https://lzlpcpj049.execute-api.us-west-1.amazonaws.com/prod/users/left", mVersion];
 
     NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
       [request setURL:[NSURL URLWithString:getURL]];

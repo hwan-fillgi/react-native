@@ -238,7 +238,7 @@
                         NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
                         NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
                         // request URL 설정
-                        NSURL *url = url = [NSURL URLWithString:@"http://192.168.0.31:3000/users/note"];
+                        NSURL *url = url = [NSURL URLWithString:@"https://lzlpcpj049.execute-api.us-west-1.amazonaws.com/prod/users/note"];
                         NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
 
                         // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
