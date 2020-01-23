@@ -7,7 +7,7 @@
 #import "RCTConvert+PSPDFConfiguration.h"
 #import "RCTPSPDFKitViewManager.h"
 
-@interface PSCCustomUserInterfaceView ()
+@interface PSCCustomUserInterfaceView () <PSPDFTabbedViewControllerDelegate, UIDocumentPickerDelegate>
 
 @property (nonatomic, nullable) PSPDFDocument *document;
 @property (nonatomic, strong) UINavigationController *selectDocumentsNavController;
@@ -23,7 +23,6 @@
     NSString *mVersion = [[RCTPSPDFKitViewManager theSettingsData] version]; // 값 읽기
     NSLog(@"mVersion %@", mVersion);
     _documents = [NSMutableArray new];
-    _saveFile = [NSMutableArray new];
     
     _rootViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
       
@@ -38,6 +37,7 @@
     _webController = [[PSPDFWebViewController alloc] initWithURL:requestURL];
 
     _tabController = [[PSPDFTabbedViewController alloc] init];
+    _tabController.delegate = self;
       
     [self.tabController.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
         builder.pageMode = PSPDFPageModeSingle;
@@ -77,7 +77,7 @@
                     if (self.jsonArray) {
                         for (int i = 0; i < self.jsonArray.count; i++) {
                             NSLog(@"json array %@", [self.jsonArray objectAtIndex:i]);
-                            if ([[self.jsonArray objectAtIndex:i] isEqualToString:@"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/note_guide_0114(add highlighter).pdf"]) {
+                            if ([[self.jsonArray objectAtIndex:i] isEqualToString:@"note_guide_0114(add highlighter).pdf"]) {
                                 NSFileManager *fileManager = [NSFileManager defaultManager];
                                 
                                 NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note_guide_0114(add highlighter)" withExtension:@"pdf"];
@@ -88,13 +88,11 @@
                                 NSError *err = [[NSError alloc] init];
                                 if ([fileManager fileExistsAtPath:filePath]){
                                     PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                                    [self.saveFile addObject:@"note_guide_0114(add highlighter).pdf"];
                                     [self.documents addObject:document];
                                 } else{
                                     BOOL result = [[NSFileManager defaultManager] copyItemAtPath:docURL.path toPath:filePath error:&err];
                                     if (result) {
                                         PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                                        [self.saveFile addObject:@"note_guide_0114(add highlighter).pdf"];
                                         [self.documents addObject:document];
                                     }
                                 }
@@ -103,12 +101,13 @@
                                 NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[self.jsonArray objectAtIndex:i]];
                                 NSURL *fileURL = [NSURL fileURLWithPath:filePath];
                                 PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                                [self.saveFile addObject:[self.jsonArray objectAtIndex:i]];
                                 [self.documents addObject:document];
                             }
                         }
                         NSLog(@"self.documents %@",  self.documents);
                         self.tabController.documents = [self.documents copy];
+                        //self.tabController.documents = [self.documents copy];
+                        //[self.tabController addDocument:self.documents makeVisible:YES animated:NO];
                         [self saveDocuments:self.documents];
                     }
                 });
@@ -187,7 +186,6 @@
             NSLog(@"file exist. %@", fileURL);
             PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
             if (self.tabController.documents.count == 0) {
-                [self.saveFile addObject:filename];
                 [self.documents addObject:document];
                 self.tabController.documents = [self.documents copy];
                 [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
@@ -199,9 +197,8 @@
                     }
                 }
                 if (sameFlag == NO) {
-                    [self.saveFile addObject:filename];
-                    [self.documents addObject:document];
-                    self.tabController.documents = [self.documents copy];
+                    //self.tabController.documents = [self.documents copy];
+                    [self.tabController addDocument:document makeVisible:YES animated:NO];
                     [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
                 }
             }
@@ -211,7 +208,6 @@
                 NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
                 PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
                 if (self.tabController.documents.count == 0) {
-                    [self.saveFile addObject:filename];
                     [self.documents addObject:document];
                     self.tabController.documents = [self.documents copy];
                     [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
@@ -223,9 +219,8 @@
                         }
                     }
                     if (sameFlag == NO) {
-                        [self.saveFile addObject:filename];
-                        [self.documents addObject:document];
-                        self.tabController.documents = [self.documents copy];
+                        //self.tabController.documents = [self.documents copy];
+                        [self.tabController addDocument:document makeVisible:YES animated:NO];
                         [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
                     }
                 }
@@ -239,11 +234,20 @@
 }
 
 -(void)saveDocuments:(NSMutableArray *)noti{
-    [self.tabController setNeedsFocusUpdate];
+    self.saveFile = [NSMutableArray new];
     NSLog(@"document save %@", self.tabController.documents);
+    for (int i = 0; i < self.tabController.documents.count; i++) {
+        NSLog(@"document save %@", self.tabController.documents[i].fileName);
+        [self.saveFile addObject:self.tabController.documents[i].fileName];
+    }
     NSDictionary *notiDic=nil;
     notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:self.saveFile,@"play", nil];
     [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlay" object:nil userInfo:notiDic];
+}
+
+- (void)tabbedPDFController:(PSPDFTabbedViewController *)tabbedPDFController didCloseDocument:(PSPDFDocument *)document{
+    NSLog(@"document CLOSE");
+    [self saveDocuments:self.documents];
 }
 
 - (void)updateScrubberBarFrameAnimated:(BOOL)animated {
