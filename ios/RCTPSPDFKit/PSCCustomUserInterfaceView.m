@@ -186,8 +186,7 @@
             NSLog(@"file exist. %@", fileURL);
             PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
             if (self.tabController.documents.count == 0) {
-                [self.documents addObject:document];
-                self.tabController.documents = [self.documents copy];
+                [self.tabController addDocument:document makeVisible:YES animated:NO];
                 [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
             } else {
                 Boolean sameFlag = NO;
@@ -208,8 +207,7 @@
                 NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
                 PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
                 if (self.tabController.documents.count == 0) {
-                    [self.documents addObject:document];
-                    self.tabController.documents = [self.documents copy];
+                    [self.tabController addDocument:document makeVisible:YES animated:NO];
                     [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
                 } else {
                     Boolean sameFlag = NO;
