@@ -22,6 +22,9 @@
 @interface RCTPSPDFKitViewManager ()
 
 @property (nonatomic, retain) UIActivityIndicatorView *activityIndicator;
+@property (nonatomic, retain) UILabel *loadingLabel;
+@property (nonatomic, retain) UIView *loadingView;
+@property (nonatomic, retain) UIViewController *viewController;
 
 @end
 
@@ -49,7 +52,7 @@
 {
     self = [super init];
     if (self) {
-        _outSampleRate = 44100;
+        _rightPdf = FALSE;
     }
     return self;
 }
@@ -58,72 +61,125 @@ RCT_EXPORT_MODULE()
 
 RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
   if (json) {
+      self.viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
+
+      //로딩화면설정
+      self.loadingView = [[UIView alloc] initWithFrame:CGRectMake(75, 155, 170, 170)];
+      self.loadingView.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.5];
+      self.loadingView.clipsToBounds = YES;
+      self.loadingView.layer.cornerRadius = 10.0;
+        
+      self.activityIndicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
+      self.activityIndicator.frame = CGRectMake(65, 40, self.activityIndicator.bounds.size.width, self.activityIndicator.bounds.size.height);
+      [self.loadingView addSubview:self.activityIndicator];
+        
+      self.loadingLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 105, 130, 22)];
+      self.loadingLabel.backgroundColor = [UIColor clearColor];
+      self.loadingLabel.textColor = [UIColor whiteColor];
+      self.loadingLabel.adjustsFontSizeToFitWidth = YES;
+      self.loadingLabel.textAlignment = NSTextAlignmentCenter;
+      self.loadingLabel.text = @"Loading...";
+      [self.loadingView addSubview:self.loadingLabel];
+        
+      // ProgressBar Start
+      [self.loadingView setCenter:self.viewController.view.center];
+      [self.viewController.view addSubview:self.loadingView];
+      self.loadingView.hidden = FALSE;
+      self.activityIndicator.hidden = FALSE;
+      [self.activityIndicator startAnimating];
+      
       NSDictionary *dictionary = [RCTConvert NSDictionary:json];
       NSString *noteType = [dictionary objectForKey:@"noteType"];
-      NSString *noteTitle = [dictionary objectForKey:@"title"];
       NSString *noteId = [dictionary objectForKey:@"noteId"];
-      noteId = [noteId stringByReplacingOccurrencesOfString:@" " withString:@"%20"];
       NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", noteId, @".pdf"];
       view.noteId = noteId;
       view.noteType = noteType;
       _version = noteId;
-      NSDictionary *notiDic=nil;
-      notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:noteId,@"pla", nil];
-      [[NSNotificationCenter defaultCenter]postNotificationName:@"setPla" object:nil userInfo:notiDic];
       
       if ([noteType isEqualToString:@"viewer"]) {
+        NSLog(@"viewer");
+        NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSLog(@"escapedPath: %@", escapedPath);
+        NSURL *url = [NSURL URLWithString:escapedPath];
+          
         // Get the PDF Data from the url in a NSData Object
-        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:[NSURL URLWithString:pdfURL]];
-        
+        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
+          
         NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-        
-        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:@"myPDF.pdf"];
+        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:@"viewer.pdf"];
         [pdfData writeToFile:filePath atomically:YES];
-        
-        // Now create Request for the file that was saved in your documents folder
-        NSURL *url = [NSURL fileURLWithPath:filePath];
-        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:url];
-        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-      } else {
-        self.activityIndicator.hidden= FALSE;
-        [self.activityIndicator startAnimating];
-        //view.pdfController.document = [RCTConvert PSPDFDocument:json];
 
+        NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+        view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+        
+        [self.activityIndicator stopAnimating];
+        self.activityIndicator.hidden = TRUE;
+        self.loadingView.hidden = TRUE;
+      } else {
+        //view.pdfController.document = [RCTConvert PSPDFDocument:json];
         NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
 
         PSPDFDocument *documents = [[PSPDFDocument alloc] initWithURL:docURL];
         PSPDFPageTemplate *externalDocumentPageTemplate = [[PSPDFPageTemplate alloc] initWithDocument:documents sourcePageIndex:0];
-        NSString *filename = noteTitle;
+        NSString *filename = [NSString stringWithFormat:@"%@%@", noteId, @".pdf"];
         NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
+          
+        //파일이 존재하지 않을때, url파일이 있는지 검사
+        NSLog(@"불러오기");
+        NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+        NSLog(@"escapedPath: %@", escapedPath);
+        NSURL *url = [NSURL URLWithString:escapedPath];
+        
+        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
+          
+        if (pdfData!=nil) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                // Get the PDF Data from the url in a NSData Object
+                NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
+                
+                [pdfData writeToFile:filePath atomically:YES];
 
-        NSFileManager *fileManager = [NSFileManager defaultManager];
-        if ([fileManager fileExistsAtPath:filePath]){
-            // Now create Request for the file that was saved in your documents folder
-            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-        } else{
-            //생성
-            NSLog(@"생성");
-            PSPDFDocumentEditor *documentEditor = [[PSPDFDocumentEditor alloc] init];
-            // Add the first page. At least one is needed to be able to save the document.
-            [documentEditor addPagesInRange:NSMakeRange(0, 1) withConfiguration:[PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
-                builder.pageSize = CGSizeMake(595, 842); // A4 in points
-            }]];
-            // Save to a new PDF file.
-            [documentEditor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
-                if (error) {
-                    NSLog(@"Error saving document. Error: %@", error);
-                } else {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-                        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-                        view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-                        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-                    });
-                }
-            }];
+                NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+                view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+                view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+                NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+                
+                [self.activityIndicator stopAnimating];
+                self.activityIndicator.hidden = TRUE;
+                self.loadingView.hidden = TRUE;
+            });
+        } else {
+            NSLog(@"no data");
+            dispatch_async(dispatch_get_main_queue(), ^{
+                NSLog(@"생성하기");
+                PSPDFDocumentEditor *documentEditor = [[PSPDFDocumentEditor alloc] init];
+                // Add the first page. At least one is needed to be able to save the document.
+                [documentEditor addPagesInRange:NSMakeRange(0, 1) withConfiguration:[PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
+                    builder.pageSize = CGSizeMake(595, 842); // A4 in points
+                }]];
+                // Save to a new PDF file.
+                [documentEditor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
+                    if (error) {
+                        NSLog(@"Error saving document. Error: %@", error);
+                    } else {
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+                            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                            UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+                            view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+                            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+                            
+                            [self.activityIndicator stopAnimating];
+                            self.activityIndicator.hidden = TRUE;
+                            self.loadingView.hidden = TRUE;
+                        });
+                    }
+                }];
+            });
         }
       }
       

@@ -22,6 +22,7 @@
   if ((self = [super initWithFrame:frame])) {
     NSString *mVersion = [[RCTPSPDFKitViewManager theSettingsData] version]; // 값 읽기
     NSLog(@"mVersion %@", mVersion);
+      
     _documents = [NSMutableArray new];
     
     _rootViewController = [UIApplication sharedApplication].keyWindow.rootViewController;
@@ -49,37 +50,41 @@
         builder.documentLabelEnabled = NO;
     }];
       
+    // 왼쪽 pdf 불러오는 부분
+    mVersion = [mVersion stringByReplacingOccurrencesOfString:@"%20" withString:@" "];
+
     NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"https://lzlpcpj049.execute-api.us-west-1.amazonaws.com/prod/users/left", mVersion];
+    NSLog(@"getURL %@", getURL);
+    // Create NSURLSession object
+    NSURLSession *session = [NSURLSession sharedSession];
+    NSString *escapedPath = [getURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+    NSLog(@"escapedPath: %@", escapedPath);
+    // Create a NSURL object.
+    NSURL *url = [NSURL URLWithString:escapedPath];
 
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
-      [request setURL:[NSURL URLWithString:getURL]];
-      [request setHTTPMethod:@"GET"];
-
-    NSURLSession *session = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]];
-    [[session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+    // Create NSURLSessionDataTask task object by url and session object.
+    NSURLSessionDataTask *task = [session dataTaskWithURL:url completionHandler:^(NSData * _Nullable data, NSURLResponse * _Nullable response, NSError * _Nullable error) {
         if (data!=nil) {
-                NSDictionary* json = [NSJSONSerialization
-                                      JSONObjectWithData:data
-                                      options:kNilOptions
-                                      error:&error];
-            NSLog(@"json %@", json);
+            NSLog(@"GET data %@", data);
+            NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+
+            NSLog(@"GET JSON %@", json);
             NSString *left_pdf = [[json objectForKey:@"classes"] objectForKey:@"left_pdf"];
             NSLog(@"left_pdf %@", left_pdf);
-            if (left_pdf == nil || [left_pdf isEqual:[NSNull null]]) {
-            } else {
-                NSError *error = NULL;
-                NSData* data = [left_pdf dataUsingEncoding:NSUTF8StringEncoding];
-                self.jsonArray = [NSJSONSerialization
-                                                  JSONObjectWithData:data
-                                                  options:kNilOptions
-                                                  error:&error];
-                dispatch_async(dispatch_get_main_queue(), ^{
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (left_pdf == nil || [left_pdf isEqual:[NSNull null]]) {
+                    
+                } else {
+                    NSError *error = NULL;
+                    NSData* data = [left_pdf dataUsingEncoding:NSUTF8StringEncoding];
+                    self.jsonArray = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                    
                     if (self.jsonArray) {
                         for (int i = 0; i < self.jsonArray.count; i++) {
                             NSLog(@"json array %@", [self.jsonArray objectAtIndex:i]);
                             if ([[self.jsonArray objectAtIndex:i] isEqualToString:@"note_guide_0114(add highlighter).pdf"]) {
                                 NSFileManager *fileManager = [NSFileManager defaultManager];
-                                
+
                                 NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note_guide_0114(add highlighter)" withExtension:@"pdf"];
                                 NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
 
@@ -106,19 +111,16 @@
                         }
                         NSLog(@"self.documents %@",  self.documents);
                         self.tabController.documents = [self.documents copy];
-                        //self.tabController.documents = [self.documents copy];
-                        //[self.tabController addDocument:self.documents makeVisible:YES animated:NO];
                         [self saveDocuments:self.documents];
                     }
-                });
-            }
-
-        } else {
-            NSLog(@"error");
+                }
+            });
         }
-        //[self loadDocuments:self.jsonArray];
-    }] resume];
-    
+    }];
+
+    // Begin task.
+    [task resume];
+      
     _navigationController = [[UINavigationController alloc] initWithRootViewController:self.tabController];
     _navigationController.view.translatesAutoresizingMaskIntoConstraints = NO;
     _navigationController.navigationBarHidden = true;
@@ -135,9 +137,11 @@
 
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
     [imageView addGestureRecognizer:pan];
-
+      
+    CGSize statusBarSize = [[UIApplication sharedApplication] statusBarFrame].size;
+      
     [NSLayoutConstraint activateConstraints:
-        @[[self.navigationController.view.topAnchor constraintEqualToAnchor:self.topAnchor constant:74],
+        @[[self.navigationController.view.topAnchor constraintEqualToAnchor:self.topAnchor constant:self.navigationController.navigationBar.frame.size.height + statusBarSize.height],
         [self.navigationController.view.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
         [self.navigationController.view.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
         [self.navigationController.view.trailingAnchor constraintEqualToAnchor:imageView.centerXAnchor]
@@ -167,9 +171,10 @@
     [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
 }
 
-// 파일선택
+// 파일선택 하는 부분
 #pragma mark - iCloud files
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
+    NSLog(@"documentPicker url %@", url);
     NSFileManager *fileManager = [NSFileManager defaultManager];
     // 파일경로 저장
     if (controller.documentPickerMode == UIDocumentPickerModeImport) {
@@ -179,8 +184,6 @@
         //NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
         NSError *err = [[NSError alloc] init];
         // Now create Request for the file that was saved in your documents folder
-        NSURL *url = [NSURL fileURLWithPath:filePath];
-        
         if ([fileManager fileExistsAtPath:filePath]){
             NSURL *fileURL = [NSURL fileURLWithPath:filePath];
             NSLog(@"file exist. %@", fileURL);
@@ -313,24 +316,5 @@
         }
     }
 }
-
-- (NSString *) getDataFrom:(NSString *)url{
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] init];
-    [request setHTTPMethod:@"GET"];
-    [request setURL:[NSURL URLWithString:url]];
-
-    NSError *error = nil;
-    NSHTTPURLResponse *responseCode = nil;
-
-    NSData *oResponseData = [NSURLConnection sendSynchronousRequest:request returningResponse:&responseCode error:&error];
-
-    if([responseCode statusCode] != 200){
-        NSLog(@"Error getting %@, HTTP status code %i", url, [responseCode statusCode]);
-        return nil;
-    }
-
-    return [[NSString alloc] initWithData:oResponseData encoding:NSUTF8StringEncoding];
-}
-
 
 @end

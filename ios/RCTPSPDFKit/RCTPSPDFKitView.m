@@ -37,6 +37,8 @@
 @property (nonatomic) PSPDFDocumentViewLayout *layout;
 @property (nonatomic, nullable) PSPDFDocumentEditor *editor;
 @property (nonatomic, retain) UIActivityIndicatorView *activityIndicator;
+@property (nonatomic, retain) UILabel *loadingLabel;
+@property (nonatomic, retain) UIView *loadingView;
 
 @end
 
@@ -50,8 +52,25 @@
     AWSServiceConfiguration *configuration = [[AWSServiceConfiguration alloc] initWithRegion:AWSRegionUSWest1 credentialsProvider:credentialsProvider];
 
     [AWSServiceManager defaultServiceManager].defaultServiceConfiguration = configuration;
+    
+    //로딩화면설정
+    self.loadingView = [[UIView alloc] initWithFrame:CGRectMake(75, 155, 170, 170)];
+    self.loadingView.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.5];
+    self.loadingView.clipsToBounds = YES;
+    self.loadingView.layer.cornerRadius = 10.0;
       
-    _activityIndicator = [[UIActivityIndicatorView alloc] initWithFrame:CGRectMake(0, 0, 32, 32)];
+    self.activityIndicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
+    self.activityIndicator.frame = CGRectMake(65, 40, self.activityIndicator.bounds.size.width, self.activityIndicator.bounds.size.height);
+    [self.loadingView addSubview:self.activityIndicator];
+      
+    self.loadingLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 105, 130, 22)];
+    self.loadingLabel.backgroundColor = [UIColor clearColor];
+    self.loadingLabel.textColor = [UIColor whiteColor];
+    self.loadingLabel.adjustsFontSizeToFitWidth = YES;
+    self.loadingLabel.textAlignment = NSTextAlignmentCenter;
+    self.loadingLabel.text = @"Saving...";
+    [self.loadingView addSubview:self.loadingLabel];
+                                    
     _browser = YES;
     _mainColor = [UIColor blackColor];
     _secondaryColor = [UIColor whiteColor];
@@ -191,19 +210,23 @@
     if ([self.noteType isEqualToString:@"viewer"]) {
         [self closeNote];
     } else{
-        UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Save" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
+        UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Fillgi Says" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
 
         UIAlertAction *ok = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
         {
             NSLog(@"제발 되라 %@", self.documents);
-            NSData *jsonData = [NSJSONSerialization dataWithJSONObject:self.documents options:NSJSONWritingPrettyPrinted error:nil];
-            NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+            NSString *jsonString = NULL;
+            if (!(self.documents == nil || [self.documents isEqual:[NSNull null]])) {
+                NSLog(@"제발 되라3 %@", self.documents);
+                NSData *jsonData = [NSJSONSerialization dataWithJSONObject:self.documents options:NSJSONWritingPrettyPrinted error:nil];
+                jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+            }
+            
             NSLog(@"json %@", jsonString);
-            [self.activityIndicator setCenter:self.center];
-            [self.activityIndicator setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleGray];
-            [self addSubview:self.activityIndicator];
-
+            
             // ProgressBar Start
+            [self.loadingView setCenter:self.center];
+            [self addSubview:self.loadingView];
             self.activityIndicator.hidden= FALSE;
             [self.activityIndicator startAnimating];
 
@@ -258,17 +281,18 @@
                                 NSLog(@"result %@", [json objectForKey:@"result"]);
                                 self.result = [json objectForKey:@"result"];
                                 if([[json objectForKey:@"result"] isEqualToString:@"success"]){
-
+                                    NSLog(@"success");
+                                    dispatch_async(dispatch_get_main_queue(), ^{
+                                        [self.activityIndicator stopAnimating];
+                                        self.activityIndicator.hidden= TRUE;
+                                        [self closeNote];
+                                    });
                                 }
                             } else {
                                 NSLog(@"error");
                             }
                         }];
                         [dataTask resume];
-
-                        [self.activityIndicator stopAnimating];
-                        self.activityIndicator.hidden= TRUE;
-                        [self closeNote];
                     });
              };
 
@@ -360,6 +384,7 @@
 }
 
 - (void)addDocuments:(nullable id)sender {
+    NSLog(@"addDocuments");
     double f1 = 0.11;
     NSNumber* num1 = [NSNumber numberWithDouble:f1];
     NSDictionary *notiDic=nil;

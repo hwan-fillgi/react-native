@@ -13,7 +13,7 @@
 
 @property(nonatomic, strong) NSString *version;
 
-@property(nonatomic, assign) NSInteger outSampleRate;
+@property(nonatomic, assign) BOOL rightPdf;
 
  
 
