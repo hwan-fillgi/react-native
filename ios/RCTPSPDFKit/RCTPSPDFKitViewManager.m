@@ -95,7 +95,6 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       view.noteId = noteId;
       view.noteType = noteType;
       _version = noteId;
-      _noteType = noteType;
       
       if ([noteType isEqualToString:@"viewer"]) {
         NSLog(@"viewer");

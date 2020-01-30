@@ -120,7 +120,13 @@
 }
 
 - (void)didMoveToWindow {
-    NSLog(@"note id %@", self.noteId);
+    NSLog(@"note type type %@", self.noteType);
+    if ([self.noteType isEqualToString:@"viewer"]) {
+        [self.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
+            [builder setInternalTapGesturesEnabled:NO];
+        }];
+    }
+
     // On iOS 13 and later.
     if (@available(iOS 13, *)) {
         // `UINavigationBar` styling.
