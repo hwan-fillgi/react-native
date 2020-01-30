@@ -53,7 +53,7 @@
     // 왼쪽 pdf 불러오는 부분
     mVersion = [mVersion stringByReplacingOccurrencesOfString:@"%20" withString:@" "];
 
-    NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"https://lzlpcpj049.execute-api.us-west-1.amazonaws.com/prod/users/left", mVersion];
+    NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/left", mVersion];
     NSLog(@"getURL %@", getURL);
     // Create NSURLSession object
     NSURLSession *session = [NSURLSession sharedSession];

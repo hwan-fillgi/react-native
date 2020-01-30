@@ -95,29 +95,41 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       view.noteId = noteId;
       view.noteType = noteType;
       _version = noteId;
+      _noteType = noteType;
       
       if ([noteType isEqualToString:@"viewer"]) {
         NSLog(@"viewer");
         NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-        NSLog(@"escapedPath: %@", escapedPath);
+        NSLog(@"viewer escapedPath: %@", pdfURL);
         NSURL *url = [NSURL URLWithString:escapedPath];
           
         // Get the PDF Data from the url in a NSData Object
         NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
-          
-        NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:@"viewer.pdf"];
-        [pdfData writeToFile:filePath atomically:YES];
+        if (pdfData) {
+            NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+            NSString *filePath = [resourceDocPath stringByAppendingPathComponent:@"viewer.pdf"];
+            [pdfData writeToFile:filePath atomically:YES];
 
-        NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-        view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-        view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-        NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-        
-        [self.activityIndicator stopAnimating];
-        self.activityIndicator.hidden = TRUE;
-        self.loadingView.hidden = TRUE;
+            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+            UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+            view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+            
+            [self.activityIndicator stopAnimating];
+            self.activityIndicator.hidden = TRUE;
+            self.loadingView.hidden = TRUE;
+        } else {
+            NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
+            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:docURL];
+            UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+            view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+            
+            [self.activityIndicator stopAnimating];
+            self.activityIndicator.hidden = TRUE;
+            self.loadingView.hidden = TRUE;
+        }
       } else {
         //view.pdfController.document = [RCTConvert PSPDFDocument:json];
         NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
@@ -135,7 +147,7 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
         
         NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
           
-        if (pdfData!=nil) {
+        if (pdfData) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 // Get the PDF Data from the url in a NSData Object
                 NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
