@@ -6,14 +6,18 @@
 #import "RCTConvert+UIBarButtonItem.h"
 #import "RCTConvert+PSPDFConfiguration.h"
 #import "RCTPSPDFKitViewManager.h"
+#import "Instant.h"
 
-@interface PSCCustomUserInterfaceView () <PSPDFTabbedViewControllerDelegate, UIDocumentPickerDelegate>
+@interface PSCCustomUserInterfaceView () <PSPDFTabbedViewControllerDelegate, UIDocumentPickerDelegate, PSPDFInstantClientDelegate>
 
 @property (nonatomic, nullable) PSPDFDocument *document;
 @property (nonatomic, strong) UINavigationController *selectDocumentsNavController;
 @property (nonatomic, strong) NSMutableArray *saveFile;
 @property (nonatomic, nullable) NSNumber *mynumber;
 @property (nonatomic, nullable) NSArray* jsonArray;
+@property (nonatomic, nullable) NSString* JWT;
+@property (nonatomic, nullable) PSPDFInstantViewController *instantViewController;
+@property (nonatomic, nullable) PSPDFInstantClient *instantClient;
 
 @end
 
@@ -137,18 +141,23 @@
 
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
     [imageView addGestureRecognizer:pan];
-      
+
     CGSize statusBarSize = [[UIApplication sharedApplication] statusBarFrame].size;
-      
+
     [NSLayoutConstraint activateConstraints:
         @[[self.navigationController.view.topAnchor constraintEqualToAnchor:self.topAnchor constant:self.navigationController.navigationBar.frame.size.height + statusBarSize.height],
         [self.navigationController.view.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
         [self.navigationController.view.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
         [self.navigationController.view.trailingAnchor constraintEqualToAnchor:imageView.centerXAnchor]
         ]];
+      
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTim:) name:@"setPlaytims" object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTi:) name:@"setPlaytis" object:nil];
-
+      
+    NSNumber* num1 = [NSNumber numberWithDouble:500];
+    NSDictionary *notiDic=nil;
+    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTime", nil];
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
   }
   return self;
 }

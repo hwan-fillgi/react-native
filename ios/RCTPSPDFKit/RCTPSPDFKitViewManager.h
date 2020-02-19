@@ -8,11 +8,12 @@
 //
 
 #import <React/RCTViewManager.h>
+#import "Instant.h"
 
 @interface RCTPSPDFKitViewManager : RCTViewManager
 
 @property(nonatomic, strong) NSString *version;
-
+@property (nonatomic, strong) PSPDFInstantClient *instantClient;
 @property(nonatomic, assign) BOOL rightPdf;
 
  

@@ -10,6 +10,7 @@
 #import <UIKit/UIKit.h>
 #import <React/RCTComponent.h>
 #import "PSCCustomUserInterfaceView.h"
+#import "Instant.h"
 
 @import PSPDFKit;
 @import PSPDFKitUI;
@@ -18,12 +19,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface RCTPSPDFKitView: UIView
 
-@property (nonatomic, retain) PSPDFViewController *pdfController;
+//@property (nonatomic, retain) PSPDFViewController *pdfController;
+@property (nonatomic, retain) PSPDFInstantViewController *pdfController;
 @property (nonatomic) BOOL hideNavigationBar;
 @property (nonatomic, retain) UIBarButtonItem *closeButton;
 @property (nonatomic, retain) UIBarButtonItem *addButton;
 @property (nonatomic, retain) UIBarButtonItem *browserButton;
 @property (nonatomic, retain) UIBarButtonItem *pageButton;
+@property (nonatomic, retain) UIBarButtonItem *collaboButton;
 @property (nonatomic) BOOL disableDefaultActionForTappedAnnotations;
 @property (nonatomic) BOOL disableAutomaticSaving;
 @property (nonatomic, copy, nullable) NSString *annotationAuthorName;

@@ -19,10 +19,13 @@
 #import <AWSS3/AWSS3TransferUtility.h>
 #import <AWSCognito/AWSCognito.h>
 #import <PDFKit/PDFKit.h>
+#import "Instant.h"
+#import "OverlayViewController.h"
+#import "RCTPSPDFKitViewManager.h"
 
 #define VALIDATE_DOCUMENT(document, ...) { if (!document.isValid) { NSLog(@"Document is invalid."); if (self.onDocumentLoadFailed) { self.onDocumentLoadFailed(@{@"error": @"Document is invalid."}); } return __VA_ARGS__; }}
 
-@interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate>
+@interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate, PSPDFInstantClientDelegate, PSPDFControllerStateHandling>
 
 @property (nonatomic, nullable) NSString *result;
 @property (nonatomic, nullable) UIViewController *controller;
@@ -39,12 +42,18 @@
 @property (nonatomic, retain) UIActivityIndicatorView *activityIndicator;
 @property (nonatomic, retain) UILabel *loadingLabel;
 @property (nonatomic, retain) UIView *loadingView;
+@property (nonatomic, nullable) NSString* JWT;
+@property (nonatomic, nullable) PSPDFInstantClient *instantClient;
 
 @end
 
 @implementation RCTPSPDFKitView
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
+    _instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient]; // 값 읽기
+      
+    UIViewController *viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
+      
     AWSCognitoCredentialsProvider *credentialsProvider = [[AWSCognitoCredentialsProvider alloc]
        initWithRegionType:AWSRegionUSWest2
        identityPoolId:@"us-west-2:ff7db21f-d7ea-4a9a-9ebe-5737bbc3e127"];
@@ -80,22 +89,24 @@
     // inside `PSPDFNavigationController` so that we don't affect the appearance of certain system controllers.
     _navBarProxy = [UINavigationBar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     _toolbarProxy = [UIToolbar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
-    NSURL *requestURL = [NSURL URLWithString:@"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/1577950286309Awe133616.pdf"];
-
-    _webController = [[PSPDFWebViewController alloc] initWithURL:requestURL];
-    
-    _pdfController = [[PSPDFViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
-        [builder overrideClass:PSPDFUserInterfaceView.class withClass:PSCCustomUserInterfaceView.class];
+      
+    _customView = [[PSCCustomUserInterfaceView alloc] init];
+      
+    _pdfController = [[PSPDFInstantViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
+        [builder overrideClass:PSPDFUserInterfaceView.class withClass:self.customView.class];
+        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, viewController.view.frame.size.width / 2, 0.0, 0.0);
+        builder.additionalScrollViewFrameInsets = contentInsets;
     }]];
-    
+      
     _pdfController.delegate = self;
     _pdfController.annotationToolbarController.delegate = self;
+
     
-    NSLog(@"note id %@", self.pdfController.document);
     _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
     _addButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addDocuments:)];
     _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
     _pageButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add-note"] style:UIBarButtonItemStylePlain target:self action:@selector(addPages:)];
+    _collaboButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(collaboList:)];
       
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationChangedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsAddedNotification object:nil];
@@ -120,6 +131,7 @@
 }
 
 - (void)didMoveToWindow {
+    
     NSLog(@"note type type %@", self.noteType);
     if ([self.noteType isEqualToString:@"viewer"]) {
         [self.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
@@ -166,6 +178,7 @@
     
   UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, self.pdfController.view.frame.size.width / 2, 0.0, 0.0);
   self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+    
   self.topController = self.pdfController;
   self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];
 
@@ -193,6 +206,10 @@
 }
 
 - (void)closeNote {
+NSLog(@"close note");
+  NSError *error;
+  [self.instantClient removeLocalStorageWithError:&error];
+    
   if (self.onCloseButtonPressed) {
     self.onCloseButtonPressed(@{});
   } else {
@@ -361,6 +378,10 @@
     [self.documents addObjectsFromArray:[notiDic objectForKey:@"play"]];
 }
 
+- (void)collaboList:(nullable id)sender {
+    NSLog(@"collaboList");
+}
+
 - (void)addPages:(nullable id)sender {
     PSPDFDocument *document = self.pdfController.document;
     if (!document) return;
@@ -440,9 +461,20 @@
   return [self.pdfController.annotationToolbarController hideToolbarAnimated:YES completion:NULL];
 }
 
-- (BOOL)saveCurrentDocumentWithError:(NSError *_Nullable *)error {
-  return [self.pdfController.document saveWithOptions:nil error:error];
-}
+#pragma mark - PSPDFInstantClientDelegate
+
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFailAuthenticationForDocumentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"nonono");
+};
+
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>) documentDescriptor didFinishReauthenticationWithJWT:(nonnull NSString *)validJWT{
+    NSLog(@"hihihi");
+};
+
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFinishDownloadForDocumentDescriptor: (nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"download finish");
+};
+
 
 #pragma mark - PSPDFDocumentDelegate
 
@@ -728,6 +760,8 @@
     UIBarButtonItem *barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
     if([barButtonItemString isEqualToString:@"pageButtonItem"]) {
         barButtonItem = _pageButton;
+    } else if([barButtonItemString isEqualToString:@"collaboButtonItem"]) {
+        barButtonItem = _collaboButton;
     } else{
         barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
     }

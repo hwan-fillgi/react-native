@@ -16,6 +16,7 @@
 #import "RCTPSPDFKitView.h"
 #import <React/RCTUIManager.h>
 #import "PSCCustomUserInterfaceView.h"
+#import "Instant.h"
 
 @import PSPDFKit;
 @import PSPDFKitUI;
@@ -25,6 +26,8 @@
 @property (nonatomic, retain) UILabel *loadingLabel;
 @property (nonatomic, retain) UIView *loadingView;
 @property (nonatomic, retain) UIViewController *viewController;
+@property (nonatomic, retain) RCTPSPDFKitView *pspdfkitView;
+@property (nonatomic, nullable) NSString* JWT;
 
 @end
 
@@ -43,9 +46,7 @@
 +(id) allocWithZone:(NSZone *)zone
 
 {
-
     return [self theSettingsData];
-
 }
 
 -(id) init
@@ -61,8 +62,9 @@ RCT_EXPORT_MODULE()
 
 RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
   if (json) {
+      NSLog(@"start");
       self.viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
-
+      
       //로딩화면설정
       self.loadingView = [[UIView alloc] initWithFrame:CGRectMake(75, 155, 170, 170)];
       self.loadingView.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.5];
@@ -82,11 +84,11 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       [self.loadingView addSubview:self.loadingLabel];
         
       // ProgressBar Start
-      [self.loadingView setCenter:self.viewController.view.center];
-      [self.viewController.view addSubview:self.loadingView];
-      self.loadingView.hidden = FALSE;
-      self.activityIndicator.hidden = FALSE;
-      [self.activityIndicator startAnimating];
+//      [self.loadingView setCenter:self.viewController.view.center];
+//      [self.viewController.view addSubview:self.loadingView];
+//      self.loadingView.hidden = FALSE;
+//      self.activityIndicator.hidden = FALSE;
+//      [self.activityIndicator startAnimating];
       
       NSDictionary *dictionary = [RCTConvert NSDictionary:json];
       NSString *noteType = [dictionary objectForKey:@"noteType"];
@@ -101,36 +103,68 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
         NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
         NSLog(@"viewer escapedPath: %@", pdfURL);
         NSURL *url = [NSURL URLWithString:escapedPath];
-          
-        // Get the PDF Data from the url in a NSData Object
-        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
-        if (pdfData) {
-            NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-            NSString *filePath = [resourceDocPath stringByAppendingPathComponent:@"viewer.pdf"];
-            [pdfData writeToFile:filePath atomically:YES];
+        
+        // 기본 구성에 URLSession 생성
+        NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+        // request URL 설정
+        NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
+        NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
 
-            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-            UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-            view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-            
-            [self.activityIndicator stopAnimating];
-            self.activityIndicator.hidden = TRUE;
-            self.loadingView.hidden = TRUE;
-        } else {
-            NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
-            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:docURL];
-            UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-            view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-            
-            [self.activityIndicator stopAnimating];
-            self.activityIndicator.hidden = TRUE;
-            self.loadingView.hidden = TRUE;
-        }
+        NSLog(@"noteId %@", noteId);
+        // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+        NSString *postParams = [NSString stringWithFormat:@"note_id=%@", noteId];
+        NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+        // 셋
+        [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+        [urlRequest setHTTPMethod:@"POST"];
+        [urlRequest setHTTPBody:documentData];
+
+        // dataTask 생성
+        NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if (data!=nil)
+            {
+                NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                NSString *token = [json objectForKey:@"token"];
+                
+                NSLog(@"data token %@", token);
+                if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                    NSLog(@"success");
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        NSError *error;
+
+                        self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
+                        self.instantClient.delegate = self;
+
+                        //NSString *JWT = @"a JWT for some layer from your server";
+                        //[client jwt]
+
+                        self.JWT = token;
+                        id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
+                        if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                            NSLog(@"documentDescriptor success");
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                PSPDFDocument *pdfDocument = documentDescriptor.readOnlyDocument;
+                                view.pdfController.document = pdfDocument;
+
+                                NSLog(@"documentDescriptor token %f %f",  view.pdfController.view.frame.size.width / 2, view.pdfController.view.frame.size.width);
+                            });
+                        } else {
+                            NSLog(@"documentDescriptor token %@",  self.JWT);
+                            NSLog(@"error: %@", error);
+                            NSLog(@"documentDescriptor failed");
+                            NSError *error;
+                            [self.instantClient removeLocalStorageWithError:&error];
+                        }
+                    });
+                }
+              } else {
+                  NSLog(@"error");
+              }
+          }];
+          [dataTask resume];
       } else {
-        //view.pdfController.document = [RCTConvert PSPDFDocument:json];
         NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
 
         PSPDFDocument *documents = [[PSPDFDocument alloc] initWithURL:docURL];
@@ -138,70 +172,189 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
         NSString *filename = [NSString stringWithFormat:@"%@%@", noteId, @".pdf"];
         NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
           
-        //파일이 존재하지 않을때, url파일이 있는지 검사
-        NSLog(@"불러오기");
-        NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-        NSLog(@"escapedPath: %@", escapedPath);
-        NSURL *url = [NSURL URLWithString:escapedPath];
-        
-        NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
-          
-        if (pdfData) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                // Get the PDF Data from the url in a NSData Object
-                NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
-                
-                [pdfData writeToFile:filePath atomically:YES];
+        // 기본 구성에 URLSession 생성
+        NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+        NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+        // request URL 설정
+        NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
+        NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
 
-                NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-                view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-                view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-                NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+        NSLog(@"noteId %@", noteId);
+        // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+        NSString *postParams = [NSString stringWithFormat:@"note_id=%@", noteId];
+        NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+        // 셋
+        [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+        [urlRequest setHTTPMethod:@"POST"];
+        [urlRequest setHTTPBody:documentData];
+
+        // dataTask 생성
+        NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if (data!=nil)
+            {
+                NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                NSString *token = [json objectForKey:@"token"];
                 
-                [self.activityIndicator stopAnimating];
-                self.activityIndicator.hidden = TRUE;
-                self.loadingView.hidden = TRUE;
-            });
-        } else {
-            NSLog(@"no data");
-            dispatch_async(dispatch_get_main_queue(), ^{
-                NSLog(@"생성하기");
-                PSPDFDocumentEditor *documentEditor = [[PSPDFDocumentEditor alloc] init];
-                // Add the first page. At least one is needed to be able to save the document.
-                [documentEditor addPagesInRange:NSMakeRange(0, 1) withConfiguration:[PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
-                    builder.pageSize = CGSizeMake(595, 842); // A4 in points
-                }]];
-                // Save to a new PDF file.
-                [documentEditor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
-                    if (error) {
-                        NSLog(@"Error saving document. Error: %@", error);
-                    } else {
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-                            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                            UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-                            view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-                            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
-                            
-                            [self.activityIndicator stopAnimating];
-                            self.activityIndicator.hidden = TRUE;
-                            self.loadingView.hidden = TRUE;
-                        });
-                    }
-                }];
-            });
-        }
+                NSLog(@"data token %@", token);
+                if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                    NSLog(@"success");
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (token == nil || [token isEqual:[NSNull null]]) {
+                            NSLog(@"no data");
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                NSLog(@"생성하기");
+                                PSPDFDocumentEditor *documentEditor = [[PSPDFDocumentEditor alloc] init];
+                                // Add the first page. At least one is needed to be able to save the document.
+                                [documentEditor addPagesInRange:NSMakeRange(0, 1) withConfiguration:[PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
+                                    builder.pageSize = CGSizeMake(595, 842); // A4 in points
+                                }]];
+                                // Save to a new PDF file.
+                                [documentEditor saveToPath:filePath withCompletionBlock:^(PSPDFDocument * document, NSError *error) {
+                                    if (error) {
+                                        NSLog(@"Error saving document. Error: %@", error);
+                                    } else {
+                                        dispatch_async(dispatch_get_main_queue(), ^{
+                                            NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+                                            view.pdfController.document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                                            UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, view.pdfController.view.frame.size.width / 2, 0.0, 0.0);
+                                            view.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+                                            NSLog(@"document url %@", view.pdfController.document.fileURL.path);
+
+                                            NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+                                            NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+                                            // request URL 설정
+                                            NSURL *url = url = [NSURL URLWithString:@"http://54.193.26.90/api/documents"];
+                                            NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
+
+                                            // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환]
+                                            NSData *postData = [NSData dataWithContentsOfFile:filePath];
+                                            NSLog(@"postData %@", postData);
+
+                                            // 셋
+                                            [urlRequest setHTTPMethod:@"POST"];
+                                            [urlRequest setValue:@"application/pdf" forHTTPHeaderField:@"Content-Type"];
+                                            [urlRequest setValue:@"Token token=secret" forHTTPHeaderField:@"Authorization"];
+                                            [urlRequest setHTTPBody:postData];
+
+                                            // dataTask 생성
+                                            NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                                if (data!=nil)
+                                                {
+                                                    NSLog(@"result %@", data);
+                                                    NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                                                    NSLog(@"result %@", [json objectForKey:@"data"]);
+
+                                                    NSDictionary *postData = [json objectForKey:@"data"];
+                                                    NSString *document_id = [postData objectForKey:@"document_id"];
+                                                    NSLog(@"document_id %@", document_id);
+                                                    // 기본 구성에 URLSession 생성
+                                                    NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+                                                    NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+                                                    // request URL 설정
+                                                    NSURL *url = url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document"];
+                                                    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
+
+                                                    NSLog(@"noteId %@", noteId);
+                                                    // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+                                                    NSString *postParams = [NSString stringWithFormat:@"document_id=%@&note_id=%@", document_id, noteId];
+                                                    NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+                                                    // 셋
+                                                    [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+                                                    [urlRequest setHTTPMethod:@"POST"];
+                                                    [urlRequest setHTTPBody:documentData];
+
+                                                    // dataTask 생성
+                                                    NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                                                        if (data!=nil)
+                                                        {
+                                                            NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                                                            NSLog(@"result %@", [json objectForKey:@"result"]);
+                                                            if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                                                                NSLog(@"success");
+                                                                dispatch_async(dispatch_get_main_queue(), ^{
+                                                                });
+                                                            }
+                                                        } else {
+                                                            NSLog(@"error");
+                                                        }
+                                                    }];
+                                                    [dataTask resume];
+                                                } else {
+                                                    NSLog(@"error");
+                                                }
+                                            }];
+                                            [dataTask resume];
+                //                            [self.activityIndicator stopAnimating];
+                //                            self.activityIndicator.hidden = TRUE;
+                //                            self.loadingView.hidden = TRUE;
+                                        });
+                                    }
+                                }];
+                            });
+                        } else {
+                            NSError *error;
+
+                            self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
+                            self.instantClient.delegate = self;
+
+                            //NSString *JWT = @"a JWT for some layer from your server";
+                            //[client jwt]
+
+                            self.JWT = token;
+                            id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
+                            if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                                NSLog(@"documentDescriptor success");
+                                dispatch_async(dispatch_get_main_queue(), ^{
+                                    PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
+                                    view.pdfController.document = pdfDocument;
+
+                                    NSLog(@"documentDescriptor token %f %f",  view.pdfController.view.frame.size.width / 2, view.pdfController.view.frame.size.width);
+
+                                    //self.pdfController = [[PSPDFInstantViewController alloc] initWithDocument:pdfDocument];
+                                });
+                            } else {
+                                NSLog(@"documentDescriptor token %@",  self.JWT);
+                                NSLog(@"error: %@", error);
+                                NSLog(@"documentDescriptor failed");
+                                NSError *error;
+                                [self.instantClient removeLocalStorageWithError:&error];
+                            }
+                        }
+                    });
+                }
+            } else {
+                NSLog(@"error");
+            }
+        }];
+        [dataTask resume];
       }
       
     view.pdfController.document.delegate = (id<PSPDFDocumentDelegate>)view;
-      
+    
     // The author name may be set before the document exists. We set it again here when the document exists.
     if (view.annotationAuthorName) {
       view.pdfController.document.defaultAnnotationUsername = view.annotationAuthorName;
     }
   }
 }
+
+#pragma mark - PSPDFInstantClientDelegate
+
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFailAuthenticationForDocumentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"nonono");
+};
+
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>) documentDescriptor didFinishReauthenticationWithJWT:(nonnull NSString *)validJWT{
+    NSLog(@"hihihi");
+};
+
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFinishDownloadForDocumentDescriptor: (nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"download finish");
+    NSError *error;
+    //[self.instantClient removeLocalStorageWithError:&error];
+};
 
 RCT_REMAP_VIEW_PROPERTY(pageIndex, pdfController.pageIndex, NSUInteger)
 

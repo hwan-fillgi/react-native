@@ -9,7 +9,7 @@
 @property (nonatomic, readonly) PSPDFViewController *pdfController;
 @property (nonatomic, readonly) PSPDFWebViewController *webController;
 @property (nonatomic, strong) PSPDFTabbedViewController *tabController;
-@property (nonatomic, readonly) UINavigationController *navigationController;
+@property (nonatomic, strong) UINavigationController *navigationController;
 
 @property (nonatomic, readonly) UIDocumentBrowserViewController *fileController;
 @property (nonatomic, readonly) UIDocumentPickerViewController *filePickerController;
