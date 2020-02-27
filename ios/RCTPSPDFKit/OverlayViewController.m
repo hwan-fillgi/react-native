@@ -19,6 +19,7 @@
 @property (nonatomic) UILabel *label;
 @property (nonatomic) UITextField *textField;
 @property (nonatomic) UIButton *button;
+@property (nonatomic, retain) UIActivityIndicatorView *pageIndicator;
 
 @end
 
@@ -28,7 +29,7 @@
 
 -(void)viewDidLoad {
     [super viewDidLoad];
-
+    
     self.label = [UILabel new];
     self.label.translatesAutoresizingMaskIntoConstraints = NO;
     self.label.numberOfLines = 0;
@@ -42,23 +43,25 @@
     self.textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     self.textField.borderStyle = UITextBorderStyleRoundedRect;
 
-    self.button = [UIButton buttonWithType:UIButtonTypeSystem];
-    self.button.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.button setTitle:@"Unlock" forState:UIControlStateNormal];
-    [self.button setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
-    [self.button sizeToFit];
-    [self.button addTarget:self action:@selector(unlock:) forControlEvents:UIControlEventTouchUpInside];
-
-    UIStackView *stackView = [[UIStackView alloc] initWithArrangedSubviews:@[self.label, self.textField, self.button]];
+    self.pageIndicator = [[UIActivityIndicatorView alloc] initWithFrame:CGRectMake(0, 0, 40, 40)];
+    [self.pageIndicator setCenter:self.view.center];
+    [self.pageIndicator setActivityIndicatorViewStyle:UIActivityIndicatorViewStyleGray];
+    
+    UIStackView *stackView = [[UIStackView alloc] initWithArrangedSubviews:@[self.pageIndicator]];
     stackView.translatesAutoresizingMaskIntoConstraints = NO;
     stackView.axis = UILayoutConstraintAxisVertical;
     stackView.distribution = UIStackViewDistributionFillEqually;
     stackView.spacing = 20;
     [self.view addSubview:stackView];
+    
+    double width = [self.overlayWidth doubleValue];
+    NSLog(@"awef %f", width);
 
     [NSLayoutConstraint activateConstraints:@[
         [stackView.widthAnchor constraintEqualToConstant:300],
         [stackView.heightAnchor constraintEqualToConstant:150],
+        [stackView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:width],
+        [stackView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [stackView.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [stackView.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor]
     ]];
@@ -78,19 +81,25 @@
 
 -(void)setControllerState:(PSPDFControllerState)state error:(NSError *)error animated:(BOOL)animated {
     NSString *text = @"";
-    UIColor *backgroundColor = [UIColor redColor];
+    UIColor *backgroundColor = [UIColor colorWithRed:0.88 green:0.88 blue:0.88 alpha:1.0];
 
     switch (state) {
         case PSPDFControllerStateDefault:
+            [self.pageIndicator stopAnimating];
+            self.pageIndicator.hidden= TRUE;
             backgroundColor = nil;
             break;
 
         case PSPDFControllerStateEmpty:
             text = @"No document set";
+            self.pageIndicator.hidden= FALSE;
+            [self.pageIndicator startAnimating];
             break;
 
         case PSPDFControllerStateLoading:
             text = @"Loading...";
+            self.pageIndicator.hidden= FALSE;
+            [self.pageIndicator startAnimating];
             break;
 
         case PSPDFControllerStateLocked:

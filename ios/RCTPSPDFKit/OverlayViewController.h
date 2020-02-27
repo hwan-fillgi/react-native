@@ -14,5 +14,6 @@
 @interface OverlayViewController : UIViewController <PSPDFControllerStateHandling>
 
 @property (nonatomic, nullable) PSPDFViewController *pdfController;
+@property (nonatomic, nullable) NSNumber *overlayWidth;
 
 @end

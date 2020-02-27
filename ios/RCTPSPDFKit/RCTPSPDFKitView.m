@@ -22,10 +22,11 @@
 #import "Instant.h"
 #import "OverlayViewController.h"
 #import "RCTPSPDFKitViewManager.h"
+#import "CollaboViewController.h"
 
 #define VALIDATE_DOCUMENT(document, ...) { if (!document.isValid) { NSLog(@"Document is invalid."); if (self.onDocumentLoadFailed) { self.onDocumentLoadFailed(@{@"error": @"Document is invalid."}); } return __VA_ARGS__; }}
 
-@interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate, PSPDFInstantClientDelegate, PSPDFControllerStateHandling>
+@interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate, PSPDFInstantClientDelegate>
 
 @property (nonatomic, nullable) NSString *result;
 @property (nonatomic, nullable) UIViewController *controller;
@@ -42,8 +43,11 @@
 @property (nonatomic, retain) UIActivityIndicatorView *activityIndicator;
 @property (nonatomic, retain) UILabel *loadingLabel;
 @property (nonatomic, retain) UIView *loadingView;
-@property (nonatomic, nullable) NSString* JWT;
+@property (nonatomic, retain) UIActivityIndicatorView *pageIndicator;
 @property (nonatomic, nullable) PSPDFInstantClient *instantClient;
+@property (nonatomic, nullable) OverlayViewController *overlayViewController;
+@property (nonatomic, nullable) NSString *insets;
+@property (nonatomic, nullable) NSString* JWT;
 
 @end
 
@@ -54,14 +58,6 @@
       
     UIViewController *viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
       
-    AWSCognitoCredentialsProvider *credentialsProvider = [[AWSCognitoCredentialsProvider alloc]
-       initWithRegionType:AWSRegionUSWest2
-       identityPoolId:@"us-west-2:ff7db21f-d7ea-4a9a-9ebe-5737bbc3e127"];
-
-    AWSServiceConfiguration *configuration = [[AWSServiceConfiguration alloc] initWithRegion:AWSRegionUSWest1 credentialsProvider:credentialsProvider];
-
-    [AWSServiceManager defaultServiceManager].defaultServiceConfiguration = configuration;
-    
     //로딩화면설정
     self.loadingView = [[UIView alloc] initWithFrame:CGRectMake(75, 155, 170, 170)];
     self.loadingView.backgroundColor = [UIColor colorWithRed:0 green:0 blue:0 alpha:0.5];
@@ -79,7 +75,7 @@
     self.loadingLabel.textAlignment = NSTextAlignmentCenter;
     self.loadingLabel.text = @"Saving...";
     [self.loadingView addSubview:self.loadingLabel];
-                                    
+    
     _browser = YES;
     _mainColor = [UIColor blackColor];
     _secondaryColor = [UIColor whiteColor];
@@ -100,8 +96,9 @@
       
     _pdfController.delegate = self;
     _pdfController.annotationToolbarController.delegate = self;
-
-    
+      
+    _overlayViewController = [OverlayViewController new];
+      
     _closeButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(closeButtonPressed:)];
     _addButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addDocuments:)];
     _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
@@ -131,14 +128,13 @@
 }
 
 - (void)didMoveToWindow {
+//    NSLog(@"note type type %@", self.noteType);
+//    if ([self.noteType isEqualToString:@"viewer"]) {
+//        [self.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
+//            [builder setInternalTapGesturesEnabled:NO];
+//        }];
+//    }
     
-    NSLog(@"note type type %@", self.noteType);
-    if ([self.noteType isEqualToString:@"viewer"]) {
-        [self.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
-            [builder setInternalTapGesturesEnabled:NO];
-        }];
-    }
-
     // On iOS 13 and later.
     if (@available(iOS 13, *)) {
         // `UINavigationBar` styling.
@@ -178,7 +174,8 @@
     
   UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, self.pdfController.view.frame.size.width / 2, 0.0, 0.0);
   self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-    
+    //NSLog(@"self.pdfController.documentViewController.view.frame.size.width %f", self.pdfController.view.frame.size.width);
+
   self.topController = self.pdfController;
   self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];
 
@@ -195,7 +192,6 @@
      [topControllerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
      [topControllerView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
    ]];
-
 }
 
 - (void)destroyViewControllerRelationship {
@@ -206,10 +202,11 @@
 }
 
 - (void)closeNote {
-NSLog(@"close note");
+  NSLog(@"close note");
+  self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
   NSError *error;
   [self.instantClient removeLocalStorageWithError:&error];
-    
+  //[self.instantClient removeLocalStorageForDocumentIdentifier:instantDescriptor.description error:&error];
   if (self.onCloseButtonPressed) {
     self.onCloseButtonPressed(@{});
   } else {
@@ -230,149 +227,150 @@ NSLog(@"close note");
 }
 
 - (void)closeButtonPressed:(nullable id)sender {
-    if ([self.noteType isEqualToString:@"viewer"]) {
-        [self closeNote];
-    } else{
-        UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Fillgi Says" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
-
-        UIAlertAction *ok = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
-        {
-            NSLog(@"제발 되라 %@", self.documents);
-            NSString *jsonString = NULL;
-            if (!(self.documents == nil || [self.documents isEqual:[NSNull null]])) {
-                NSLog(@"제발 되라3 %@", self.documents);
-                NSData *jsonData = [NSJSONSerialization dataWithJSONObject:self.documents options:NSJSONWritingPrettyPrinted error:nil];
-                jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-            }
-            
-            NSLog(@"json %@", jsonString);
-            
-            // ProgressBar Start
-            [self.loadingView setCenter:self.center];
-            [self addSubview:self.loadingView];
-            self.activityIndicator.hidden= FALSE;
-            [self.activityIndicator startAnimating];
-
-            PSPDFDocument *document = self.pdfController.document;
-            if (!document) return;
-            PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
-            if (!editor) return;
-
-            NSURL *fileURL = self.pdfController.document.fileURL;
-            NSString *uploadURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", self.noteId, @".pdf"];
-            NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", @"upload/", self.noteId, @".pdf"];
-            NSString *imageValue = [NSString stringWithFormat:@"%@%@%@", @"right_image/", self.noteId, @".png"];
-            NSString *imgValue = [NSString stringWithFormat:@"%@%@", self.noteId, @".png"];
-
-            // Create path.
-            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-            NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:imgValue];
-            NSURL *rightImage = [[NSURL alloc] initFileURLWithPath:filePath];
-
-            AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
-            expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    // Do something e.g. Update a progress bar.
-                    NSLog(@"progressz");
-                });
-            };
-
-            AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        NSLog(@"File upload completed");
-                        // 기본 구성에 URLSession 생성
-                        NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-                        NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
-                        // request URL 설정
-                        NSURL *url = url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/note"];
-                        NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
-
-                        // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
-                        NSString *postParams = [NSString stringWithFormat:@"right_pdf=%@&note_id=%@&left_pdf=%@", uploadURL, self.noteId, jsonString];
-                        NSData *postData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
-
-                        // 셋
-                        [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
-                        [urlRequest setHTTPMethod:@"POST"];
-                        [urlRequest setHTTPBody:postData];
-
-                        // dataTask 생성
-                        NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-                            if (data!=nil)
-                            {
-                                NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-                                NSLog(@"result %@", [json objectForKey:@"result"]);
-                                self.result = [json objectForKey:@"result"];
-                                if([[json objectForKey:@"result"] isEqualToString:@"success"]){
-                                    NSLog(@"success");
-                                    dispatch_async(dispatch_get_main_queue(), ^{
-                                        [self.activityIndicator stopAnimating];
-                                        self.activityIndicator.hidden= TRUE;
-                                        [self closeNote];
-                                    });
-                                }
-                            } else {
-                                NSLog(@"error");
-                            }
-                        }];
-                        [dataTask resume];
-                    });
-             };
-
-            AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
-
-            // Save and overwrite the document.
-            [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
-                if (error) {
-                    NSLog(@"Document editing failed: %@", error);
-                    return;
-                }
-                // Access the UI on the main thread.
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    PDFView * pdfView = [[PDFView alloc] initWithFrame : CGRectMake(0, 0, 424, 600)];
-                    pdfView.document = [[PDFDocument alloc] initWithURL : [NSURL fileURLWithPath : savedDocument.fileURL.path]];
-
-                    UIImage *thumbnailImage = [[pdfView.document pageAtIndex:0] thumbnailOfSize:CGSizeMake(424, 600) forBox:kPDFDisplayBoxMediaBox];
-                    // Save image.
-                    if ([UIImagePNGRepresentation(thumbnailImage) writeToFile:filePath atomically:YES]) {
-                        NSLog(@"Success");
-                        [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-                            if (task.error) {
-                                NSLog(@"Error: %@", task.error);
-                            }
-                            if (task.result) {
-                                // Do something with uploadTask.
-                            }
-                            return nil;
-                        }];
-
-                        [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-                            if (task.error) {
-                                NSLog(@"Error: %@", task.error);
-                            }
-                            if (task.result) {
-                                // Do something with uploadTask.
-                            }
-                            return nil;
-                        }];
-                    }
-                    else{
-                        NSLog(@"Error");
-                    }
-                });
-            }];
-        }];
-        UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"No" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action){
-            [self closeNote];
-        }];
-        [alertController addAction:ok];
-        [alertController addAction:cancel];
-
-        [self.pdfController presentViewController:alertController animated:YES completion:nil];
-    }
+    [self closeNote];
+//    if ([self.noteType isEqualToString:@"viewer"]) {
+//        [self closeNote];
+//    } else{
+//        UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Fillgi Says" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
+//
+//        UIAlertAction *ok = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+//        {
+//            NSLog(@"제발 되라 %@", self.documents);
+//            NSString *jsonString = NULL;
+//            if (!(self.documents == nil || [self.documents isEqual:[NSNull null]])) {
+//                NSLog(@"제발 되라3 %@", self.documents);
+//                NSData *jsonData = [NSJSONSerialization dataWithJSONObject:self.documents options:NSJSONWritingPrettyPrinted error:nil];
+//                jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+//            }
+//
+//            NSLog(@"json %@", jsonString);
+//
+//            // ProgressBar Start
+//            [self.loadingView setCenter:self.center];
+//            [self addSubview:self.loadingView];
+//            self.activityIndicator.hidden= FALSE;
+//            [self.activityIndicator startAnimating];
+//
+//            PSPDFDocument *document = self.pdfController.document;
+//            if (!document) return;
+//            PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
+//            if (!editor) return;
+//
+//            NSURL *fileURL = self.pdfController.document.fileURL;
+//            NSString *uploadURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", self.noteId, @".pdf"];
+//            NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", @"upload/", self.noteId, @".pdf"];
+//            NSString *imageValue = [NSString stringWithFormat:@"%@%@%@", @"right_image/", self.noteId, @".png"];
+//            NSString *imgValue = [NSString stringWithFormat:@"%@%@", self.noteId, @".png"];
+//
+//            // Create path.
+//            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+//            NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:imgValue];
+//            NSURL *rightImage = [[NSURL alloc] initFileURLWithPath:filePath];
+//
+//            AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
+//            expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
+//                dispatch_async(dispatch_get_main_queue(), ^{
+//                    // Do something e.g. Update a progress bar.
+//                    NSLog(@"progressz");
+//                });
+//            };
+//
+//            AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
+//                    dispatch_async(dispatch_get_main_queue(), ^{
+//                        NSLog(@"File upload completed");
+//                        // 기본 구성에 URLSession 생성
+//                        NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+//                        NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+//                        // request URL 설정
+//                        NSURL *url = url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/note"];
+//                        NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
+//
+//                        // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+//                        NSString *postParams = [NSString stringWithFormat:@"right_pdf=%@&note_id=%@&left_pdf=%@", uploadURL, self.noteId, jsonString];
+//                        NSData *postData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+//
+//                        // 셋
+//                        [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+//                        [urlRequest setHTTPMethod:@"POST"];
+//                        [urlRequest setHTTPBody:postData];
+//
+//                        // dataTask 생성
+//                        NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+//                            if (data!=nil)
+//                            {
+//                                NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+//                                NSLog(@"result %@", [json objectForKey:@"result"]);
+//                                self.result = [json objectForKey:@"result"];
+//                                if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+//                                    NSLog(@"success");
+//                                    dispatch_async(dispatch_get_main_queue(), ^{
+//                                        [self.activityIndicator stopAnimating];
+//                                        self.activityIndicator.hidden= TRUE;
+//                                        [self closeNote];
+//                                    });
+//                                }
+//                            } else {
+//                                NSLog(@"error");
+//                            }
+//                        }];
+//                        [dataTask resume];
+//                    });
+//             };
+//
+//            AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
+//
+//            // Save and overwrite the document.
+//            [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
+//                if (error) {
+//                    NSLog(@"Document editing failed: %@", error);
+//                    return;
+//                }
+//                // Access the UI on the main thread.
+//                dispatch_async(dispatch_get_main_queue(), ^{
+//                    PDFView * pdfView = [[PDFView alloc] initWithFrame : CGRectMake(0, 0, 424, 600)];
+//                    pdfView.document = [[PDFDocument alloc] initWithURL : [NSURL fileURLWithPath : savedDocument.fileURL.path]];
+//
+//                    UIImage *thumbnailImage = [[pdfView.document pageAtIndex:0] thumbnailOfSize:CGSizeMake(424, 600) forBox:kPDFDisplayBoxMediaBox];
+//                    // Save image.
+//                    if ([UIImagePNGRepresentation(thumbnailImage) writeToFile:filePath atomically:YES]) {
+//                        NSLog(@"Success");
+//                        [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+//                            if (task.error) {
+//                                NSLog(@"Error: %@", task.error);
+//                            }
+//                            if (task.result) {
+//                                // Do something with uploadTask.
+//                            }
+//                            return nil;
+//                        }];
+//
+//                        [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+//                            if (task.error) {
+//                                NSLog(@"Error: %@", task.error);
+//                            }
+//                            if (task.result) {
+//                                // Do something with uploadTask.
+//                            }
+//                            return nil;
+//                        }];
+//                    }
+//                    else{
+//                        NSLog(@"Error");
+//                    }
+//                });
+//            }];
+//        }];
+//        UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"No" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action){
+//            [self closeNote];
+//        }];
+//        [alertController addAction:ok];
+//        [alertController addAction:cancel];
+//
+//        [self.pdfController presentViewController:alertController animated:YES completion:nil];
+//    }
 }
 
--(void)setPlay:(NSNotification *)noti{
+- (void)setPlay:(NSNotification *)noti{
     _documents = [NSMutableArray new];
     NSDictionary *notiDic=[noti userInfo];
     [self.documents addObjectsFromArray:[notiDic objectForKey:@"play"]];
@@ -380,34 +378,152 @@ NSLog(@"close note");
 
 - (void)collaboList:(nullable id)sender {
     NSLog(@"collaboList");
+    CollaboViewController *collaboViewController = [CollaboViewController new];
+    collaboViewController.modalPresentationStyle = UIModalPresentationCustom;
+    [self.topController presentViewController:collaboViewController animated:NO completion:nil];
 }
 
 - (void)addPages:(nullable id)sender {
-    PSPDFDocument *document = self.pdfController.document;
-    if (!document) return;
-    PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
-    if (!editor) return;
+    NSLog(@"addPages");
+    double i = [self.mynumber doubleValue];
+    NSLog(@"self.mynumber doubleValue %f", i);
+    
+    self.overlayViewController = [OverlayViewController new];
+    self.overlayViewController.pdfController = self.pdfController;
+    self.overlayViewController.overlayWidth = self.mynumber;
+    self.pdfController.overlayViewController = self.overlayViewController;
+    
+    id<PSPDFInstantDocumentDescriptor> instantDescriptor = [[RCTPSPDFKitViewManager theSettingsData] instantDescriptor]; // 값 읽기
+    self.JWT = [[RCTPSPDFKitViewManager theSettingsData] JWT]; // 값 읽기
     
     NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
-    PSPDFDocument *documents = [[PSPDFDocument alloc] initWithURL:docURL];
-    PSPDFPageTemplate *externalDocumentPageTemplate = [[PSPDFPageTemplate alloc] initWithDocument:documents sourcePageIndex:0];
-    // Add a new page as the first page.
-    PSPDFNewPageConfiguration *newPageConfiguration = [PSPDFNewPageConfiguration newPageConfigurationWithPageTemplate:externalDocumentPageTemplate builderBlock:^(PSPDFNewPageConfigurationBuilder *builder) {
-        builder.pageSize = CGSizeMake(595, 842); // A4 in points
-    }];
-    [editor addPagesInRange:NSMakeRange(document.pageCount, 1) withConfiguration:newPageConfiguration];
+    NSData *docData = [NSData dataWithContentsOfURL:docURL];
+    
+    NSError *error;
+    NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+    
+    NSMutableDictionary *json = [NSMutableDictionary dictionaryWithCapacity:1];
+    NSNumber *someNumber = [NSNumber numberWithInt:0];
+    [json setObject:@"importDocument" forKey:@"type"];
+    [json setObject:@"5ce11b7c-0726-48a2-a493-1cf4f92f26c5" forKey:@"document"];
+    [json setObject:someNumber forKey:@"afterPageIndex"];
+    
+    NSArray *array = @[json];
+    NSLog(@"testjson %@", array);
+    NSDictionary *postJson = [NSDictionary dictionaryWithObject:array forKey:@"operations"];
+    
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:postJson options:NSJSONWritingPrettyPrinted error:&error];
+    
+    NSString *requestUrl = [NSString stringWithFormat:@"%@%@%@", @"http://54.153.15.96/api/documents/", instantDescriptor.identifier, @"/apply_operations"];
+    
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:requestUrl]];
+    [request setHTTPMethod:@"POST"];
+    NSString *boundary = @"customboundary";
+    NSString *contentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@",boundary];
+    [request setValue:contentType forHTTPHeaderField: @"Content-Type"];
+    [request setValue:@"Token token=secret" forHTTPHeaderField:@"Authorization"];
 
-    // Save and overwrite the document.
-    [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
-        if (error) {
-            NSLog(@"Document editing failed: %@", error);
-            return;
+    NSMutableData *body = [NSMutableData data];
+
+    // json
+    [body appendData:[[NSString stringWithFormat:@"\r\n--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: attachment; name=\"operations\"; filename=\"%@\"\r\n", @"operations.json"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[@"Content-Type: application/json\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[NSData dataWithData:jsonData]];
+    [body appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    // file
+    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: attachment; name=\"5ce11b7c-0726-48a2-a493-1cf4f92f26c5\"; filename=\"%@\"\r\n", @"note.pdf"] dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[@"Content-Type: application/pdf\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+    [body appendData:[NSData dataWithData:docData]];
+    [body appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    // close form
+    [body appendData:[[NSString stringWithFormat:@"--%@--", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+    
+    NSString *bb = [[NSString alloc] initWithData:body encoding:NSASCIIStringEncoding];
+    NSLog(@"setHTTPBody %@", bb);
+    // set request body
+    [request setHTTPBody:body];
+
+    // dataTask 생성
+    NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (data!=nil)
+        {
+            NSString* str = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+
+            NSLog(@"result %@", str);
+            NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+            NSLog(@"result %@", json);
+
+            self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
+            self.instantClient.delegate = self;
+            
+            [self.instantClient removeLocalStorageForDocumentIdentifier:instantDescriptor.identifier error:&error];
+            
+            // 기본 구성에 URLSession 생성
+            NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+            NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+            // request URL 설정
+            NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
+            NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
+
+            NSLog(@"noteId %@", self.noteId);
+            // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+            NSString *postParams = [NSString stringWithFormat:@"note_id=%@", self.noteId];
+            NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+            // 셋
+            [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+            [urlRequest setHTTPMethod:@"POST"];
+            [urlRequest setHTTPBody:documentData];
+
+            // dataTask 생성
+            NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                if (data!=nil)
+                {
+                    NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                    NSString *token = [json objectForKey:@"token"];
+                    
+                    NSLog(@"data token %@", token);
+                    if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                        NSLog(@"success");
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            NSError *error;
+
+                            //self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
+                            if (token == nil || [token isEqual:[NSNull null]]) {
+                            } else {
+                                id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
+                                if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                                    NSLog(@"documentDescriptor success");
+                                    dispatch_async(dispatch_get_main_queue(), ^{
+                                        NSError *error;
+                                        [NSFileManager.defaultManager createDirectoryAtURL:PSPDFInstantClient.dataDirectory withIntermediateDirectories:YES attributes:@{NSFileProtectionKey: NSFileProtectionComplete} error:&error];
+
+                                        PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
+                                        self.pdfController.document = pdfDocument;
+                                    });
+                                } else {
+                                    NSLog(@"documentDescriptor token %@",  self.JWT);
+                                    NSLog(@"error: %@", error);
+                                    NSLog(@"documentDescriptor failed");
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    NSLog(@"error");
+                }
+            }];
+            [dataTask resume];
+        } else {
+            NSLog(@"error");
         }
-        // Access the UI on the main thread.
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self.pdfController reloadData];
-        });
     }];
+    [dataTask resume];
 }
 
 - (void)addDocuments:(nullable id)sender {
@@ -464,17 +580,41 @@ NSLog(@"close note");
 #pragma mark - PSPDFInstantClientDelegate
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFailAuthenticationForDocumentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
-    NSLog(@"nonono");
-};
+    NSLog(@"didFinishReauthenticationWithJWT");
+}
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>) documentDescriptor didFinishReauthenticationWithJWT:(nonnull NSString *)validJWT{
-    NSLog(@"hihihi");
-};
+    NSLog(@"didFinishReauthenticationWithJWT");
+}
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFinishDownloadForDocumentDescriptor: (nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
-    NSLog(@"download finish");
-};
+    NSLog(@"didFinishDownloadForDocumentDescriptor");
+    NSLog(@"didFinishDownloadForDocumentDescriptor token %lu",  documentDescriptor.editableDocument.pageCount);
+    
+    dispatch_async(dispatch_get_main_queue(), ^{
+        double i = [self.mynumber doubleValue];
+        NSLog(@"asd: %f", i);
+        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, i, 0.0, 0.0);
+        self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+    });
+}
 
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor didFailDownloadWithError:(nonnull NSError *)error{
+    NSLog(@"didFailDownloadWithError");
+    [documentDescriptor reauthenticateWithJWT:self.JWT];
+}
+
+- (void)instantClient:(PSPDFInstantClient *)instantClient didBeginSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"didBeginSyncForDocumentDescriptor %ld", documentDescriptor.documentState);
+}
+
+- (void)instantClient:(PSPDFInstantClient *)instantClient didChangeSyncStateForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"didChangeSyncStateForDocumentDescriptor %ld", documentDescriptor.documentState);
+}
+
+- (void)instantClient:(PSPDFInstantClient *)instantClient didFinishSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"didFinishSyncForDocumentDescriptor %ld", documentDescriptor.documentState);
+}
 
 #pragma mark - PSPDFDocumentDelegate
 
@@ -843,7 +983,11 @@ NSLog(@"close note");
     NSDictionary *notiDic=[noti userInfo];
     self.mynumber = [notiDic objectForKey:@"playTime"];
     double i = [self.mynumber doubleValue];
-    NSLog(@"asd: %f",i);
+    
+    self.overlayViewController = [OverlayViewController new];
+    self.overlayViewController.pdfController = self.pdfController;
+    self.overlayViewController.overlayWidth = self.mynumber;
+    self.pdfController.overlayViewController = self.overlayViewController;
     
     UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, i, 0.0, 0.0);
     self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;

@@ -15,9 +15,11 @@
 @property(nonatomic, strong) NSString *version;
 @property (nonatomic, strong) PSPDFInstantClient *instantClient;
 @property(nonatomic, assign) BOOL rightPdf;
-
+@property (nonatomic, nullable) NSString *document_id;
+@property (nonatomic, nullable) id<PSPDFInstantDocumentDescriptor> instantDescriptor;
+@property (nonatomic, nullable) NSString* JWT;
+@property (nonatomic, nullable) NSString* noteId;
  
-
 +(RCTPSPDFKitViewManager *) theSettingsData;
 
 @end

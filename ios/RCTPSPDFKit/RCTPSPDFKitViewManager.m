@@ -27,7 +27,6 @@
 @property (nonatomic, retain) UIView *loadingView;
 @property (nonatomic, retain) UIViewController *viewController;
 @property (nonatomic, retain) RCTPSPDFKitView *pspdfkitView;
-@property (nonatomic, nullable) NSString* JWT;
 
 @end
 
@@ -63,6 +62,8 @@ RCT_EXPORT_MODULE()
 RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
   if (json) {
       NSLog(@"start");
+      NSURL* url = [[NSURL alloc] initWithString:@"http://localhost:8080"];
+      
       self.viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
       
       //로딩화면설정
@@ -134,11 +135,8 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                     dispatch_async(dispatch_get_main_queue(), ^{
                         NSError *error;
 
-                        self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
+                        self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];
                         self.instantClient.delegate = self;
-
-                        //NSString *JWT = @"a JWT for some layer from your server";
-                        //[client jwt]
 
                         self.JWT = token;
                         id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
@@ -224,7 +222,7 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                                             NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
                                             NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
                                             // request URL 설정
-                                            NSURL *url = url = [NSURL URLWithString:@"http://54.193.26.90/api/documents"];
+                                            NSURL *url = url = [NSURL URLWithString:@"http://54.153.15.96/api/documents"];
                                             NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
 
                                             // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환]
@@ -247,6 +245,7 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
 
                                                     NSDictionary *postData = [json objectForKey:@"data"];
                                                     NSString *document_id = [postData objectForKey:@"document_id"];
+                                                    self.document_id = document_id;
                                                     NSLog(@"document_id %@", document_id);
                                                     // 기본 구성에 URLSession 생성
                                                     NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -274,6 +273,9 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                                                             if([[json objectForKey:@"result"] isEqualToString:@"success"]){
                                                                 NSLog(@"success");
                                                                 dispatch_async(dispatch_get_main_queue(), ^{
+//                                                                    [self.activityIndicator stopAnimating];
+//                                                                    self.activityIndicator.hidden = TRUE;
+//                                                                    self.loadingView.hidden = TRUE;
                                                                 });
                                                             }
                                                         } else {
@@ -286,9 +288,6 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                                                 }
                                             }];
                                             [dataTask resume];
-                //                            [self.activityIndicator stopAnimating];
-                //                            self.activityIndicator.hidden = TRUE;
-                //                            self.loadingView.hidden = TRUE;
                                         });
                                     }
                                 }];
@@ -296,30 +295,25 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                         } else {
                             NSError *error;
 
-                            self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
+                            self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];
                             self.instantClient.delegate = self;
 
-                            //NSString *JWT = @"a JWT for some layer from your server";
-                            //[client jwt]
-
                             self.JWT = token;
-                            id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
-                            if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
-                                NSLog(@"documentDescriptor success");
-                                dispatch_async(dispatch_get_main_queue(), ^{
+                            if (token == nil || [token isEqual:[NSNull null]]) {
+                            } else {
+                                id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
+                                if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                                    NSLog(@"documentDescriptor success");
+                                    self.instantDescriptor = documentDescriptor;
                                     PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
                                     view.pdfController.document = pdfDocument;
-
-                                    NSLog(@"documentDescriptor token %f %f",  view.pdfController.view.frame.size.width / 2, view.pdfController.view.frame.size.width);
-
-                                    //self.pdfController = [[PSPDFInstantViewController alloc] initWithDocument:pdfDocument];
-                                });
-                            } else {
-                                NSLog(@"documentDescriptor token %@",  self.JWT);
-                                NSLog(@"error: %@", error);
-                                NSLog(@"documentDescriptor failed");
-                                NSError *error;
-                                [self.instantClient removeLocalStorageWithError:&error];
+                                } else {
+                                    NSLog(@"documentDescriptor token %@",  self.JWT);
+                                    NSLog(@"error: %@", error);
+                                    NSLog(@"documentDescriptor failed");
+                                    NSError *error;
+                                    [self.instantClient removeLocalStorageWithError:&error];
+                                }
                             }
                         }
                     });
@@ -343,18 +337,50 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
 #pragma mark - PSPDFInstantClientDelegate
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFailAuthenticationForDocumentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
-    NSLog(@"nonono");
-};
+    NSLog(@"didFinishReauthenticationWithJWT");
+}
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>) documentDescriptor didFinishReauthenticationWithJWT:(nonnull NSString *)validJWT{
-    NSLog(@"hihihi");
-};
+    NSLog(@"didFinishReauthenticationWithJWT");
+}
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFinishDownloadForDocumentDescriptor: (nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
-    NSLog(@"download finish");
-    NSError *error;
-    //[self.instantClient removeLocalStorageWithError:&error];
-};
+    NSLog(@"didFinishDownloadForDocumentDescriptor");
+    NSLog(@"didFinishDownloadForDocumentDescriptor token %lu",  documentDescriptor.editableDocument.pageCount);
+}
+
+- (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor didFailDownloadWithError:(nonnull NSError *)error{
+    NSLog(@"didFailDownloadWithError");
+}
+
+- (void)instantClient:(PSPDFInstantClient *)instantClient didBeginSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"didBeginSyncForDocumentDescriptor %ld", documentDescriptor.documentState);
+    
+//    NSDirectoryEnumerator<NSURL *> *enumerator = [NSFileManager.defaultManager enumeratorAtURL:PSPDFInstantClient.dataDirectory includingPropertiesForKeys:@[] options:0 errorHandler:^BOOL(NSURL *url, NSError *error) {
+//        NSLog(@"%@", error);
+//        return YES;
+//    }];
+//
+//    if (enumerator == nil) {
+//        NSLog(@"Could not create enumerator for Instant data directory.");
+//    }
+//
+//    for (NSURL *url in enumerator) {
+//        NSError *error;
+//        NSLog(@"urlurlurlurl %@", url);
+//        if (![url setResourceValue:NSURLFileProtectionComplete forKey:NSURLFileProtectionKey error:&error]) {
+//            NSLog(@"%@", error);
+//        }
+//    }
+}
+
+- (void)instantClient:(PSPDFInstantClient *)instantClient didChangeSyncStateForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"didChangeSyncStateForDocumentDescriptor %ld", documentDescriptor.documentState);
+}
+
+- (void)instantClient:(PSPDFInstantClient *)instantClient didFinishSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
+    NSLog(@"didFinishSyncForDocumentDescriptor %ld", documentDescriptor.documentState);
+}
 
 RCT_REMAP_VIEW_PROPERTY(pageIndex, pdfController.pageIndex, NSUInteger)
 

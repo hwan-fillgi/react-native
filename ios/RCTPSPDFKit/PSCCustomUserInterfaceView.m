@@ -7,6 +7,7 @@
 #import "RCTConvert+PSPDFConfiguration.h"
 #import "RCTPSPDFKitViewManager.h"
 #import "Instant.h"
+#import <AWSS3/AWSS3TransferUtility.h>
 
 @interface PSCCustomUserInterfaceView () <PSPDFTabbedViewControllerDelegate, UIDocumentPickerDelegate, PSPDFInstantClientDelegate>
 
@@ -24,8 +25,16 @@
 @implementation PSCCustomUserInterfaceView
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
-    NSString *mVersion = [[RCTPSPDFKitViewManager theSettingsData] version]; // 값 읽기
-    NSLog(@"mVersion %@", mVersion);
+    self.noteId = [[RCTPSPDFKitViewManager theSettingsData] version]; // 값 읽기
+    NSLog(@"mVersion %@", self.noteId);
+    
+    AWSCognitoCredentialsProvider *credentialsProvider = [[AWSCognitoCredentialsProvider alloc]
+       initWithRegionType:AWSRegionUSWest2
+       identityPoolId:@"us-west-2:ff7db21f-d7ea-4a9a-9ebe-5737bbc3e127"];
+
+    AWSServiceConfiguration *configuration = [[AWSServiceConfiguration alloc] initWithRegion:AWSRegionUSWest1 credentialsProvider:credentialsProvider];
+
+    [AWSServiceManager defaultServiceManager].defaultServiceConfiguration = configuration;
       
     _documents = [NSMutableArray new];
     
@@ -55,9 +64,9 @@
     }];
       
     // 왼쪽 pdf 불러오는 부분
-    mVersion = [mVersion stringByReplacingOccurrencesOfString:@"%20" withString:@" "];
+    self.noteId = [self.noteId stringByReplacingOccurrencesOfString:@"%20" withString:@" "];
 
-    NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/left", mVersion];
+    NSString *getURL = [NSString stringWithFormat:@"%@?noteId=%@",@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/left", self.noteId];
     NSLog(@"getURL %@", getURL);
     // Create NSURLSession object
     NSURLSession *session = [NSURLSession sharedSession];
@@ -85,10 +94,9 @@
                     
                     if (self.jsonArray) {
                         for (int i = 0; i < self.jsonArray.count; i++) {
+                            NSFileManager *fileManager = [NSFileManager defaultManager];
                             NSLog(@"json array %@", [self.jsonArray objectAtIndex:i]);
                             if ([[self.jsonArray objectAtIndex:i] isEqualToString:@"note_guide_0114(add highlighter).pdf"]) {
-                                NSFileManager *fileManager = [NSFileManager defaultManager];
-
                                 NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note_guide_0114(add highlighter)" withExtension:@"pdf"];
                                 NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
 
@@ -96,9 +104,11 @@
                                 NSURL *fileURL = [NSURL fileURLWithPath:filePath];
                                 NSError *err = [[NSError alloc] init];
                                 if ([fileManager fileExistsAtPath:filePath]){
+                                    NSLog(@"file exist");
                                     PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
                                     [self.documents addObject:document];
                                 } else{
+                                    NSLog(@"file not exist");
                                     BOOL result = [[NSFileManager defaultManager] copyItemAtPath:docURL.path toPath:filePath error:&err];
                                     if (result) {
                                         PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
@@ -108,6 +118,23 @@
                             } else {
                                 NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
                                 NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[self.jsonArray objectAtIndex:i]];
+                                if ([fileManager fileExistsAtPath:filePath]){
+                                    NSLog(@"file exist");
+                                } else{
+                                    NSLog(@"file not exist");
+                                    NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/", self.noteId, @"/", [self.jsonArray objectAtIndex:i]];
+                                    NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+                                    NSLog(@"viewer escapedPath: %@", pdfURL);
+                                    NSURL *url = [NSURL URLWithString:escapedPath];
+                                      
+                                    // Get the PDF Data from the url in a NSData Object
+                                    NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
+                                    if (pdfData) {
+                                        NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+                                        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[self.jsonArray objectAtIndex:i]];
+                                        [pdfData writeToFile:filePath atomically:YES];
+                                    }
+                                }
                                 NSURL *fileURL = [NSURL fileURLWithPath:filePath];
                                 PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
                                 [self.documents addObject:document];
@@ -154,7 +181,7 @@
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTim:) name:@"setPlaytims" object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTi:) name:@"setPlaytis" object:nil];
       
-    NSNumber* num1 = [NSNumber numberWithDouble:500];
+    NSNumber* num1 = [NSNumber numberWithDouble:self.navigationController.view.frame.size.width / 2];
     NSDictionary *notiDic=nil;
     notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTime", nil];
     [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
@@ -183,11 +210,40 @@
 // 파일선택 하는 부분
 #pragma mark - iCloud files
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
+    NSURL *fileURL = url;
+    NSString *filename = url.lastPathComponent;
+    NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", self.noteId, @"/", filename];
+
+    AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
+    expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // Do something e.g. Update a progress bar.
+            NSLog(@"progressz");
+        });
+    };
+
+    AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                NSLog(@"File upload completed");
+            });
+     };
+
+    AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
+    
+    [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+        if (task.error) {
+            NSLog(@"Error: %@", task.error);
+        }
+        if (task.result) {
+            // Do something with uploadTask.
+        }
+        return nil;
+    }];
+    
     NSLog(@"documentPicker url %@", url);
     NSFileManager *fileManager = [NSFileManager defaultManager];
     // 파일경로 저장
     if (controller.documentPickerMode == UIDocumentPickerModeImport) {
-        NSString *filename = url.lastPathComponent;
         NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
         NSString *filePath = [resourceDocPath stringByAppendingPathComponent:filename];
         //NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
@@ -253,6 +309,39 @@
     NSDictionary *notiDic=nil;
     notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:self.saveFile,@"play", nil];
     [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlay" object:nil userInfo:notiDic];
+    
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:self.saveFile options:NSJSONWritingPrettyPrinted error:nil];
+    NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+    // 기본 구성에 URLSession 생성
+    NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+    // request URL 설정
+    NSURL *url = url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/leftpdf"];
+    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
+
+    // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+    NSString *postParams = [NSString stringWithFormat:@"note_id=%@&left_pdf=%@", self.noteId, jsonString];
+    NSData *postData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+    // 셋
+    [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+    [urlRequest setHTTPMethod:@"POST"];
+    [urlRequest setHTTPBody:postData];
+
+    // dataTask 생성
+    NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (data!=nil)
+        {
+            NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+            NSLog(@"result %@", [json objectForKey:@"result"]);
+            if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                NSLog(@"success");
+            }
+        } else {
+            NSLog(@"error");
+        }
+    }];
+    [dataTask resume];
 }
 
 - (void)tabbedPDFController:(PSPDFTabbedViewController *)tabbedPDFController didCloseDocument:(PSPDFDocument *)document{

@@ -45,6 +45,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, retain) PSPDFWebViewController *webController;
 @property (nonatomic, nullable) NSMutableArray *documents;
 @property (nonatomic, nullable) PSCCustomUserInterfaceView *customView;
+@property (nonatomic, nullable) UIEdgeInsets *contentInsets;
+
 
 /// Annotation Toolbar
 - (BOOL)enterAnnotationCreationMode;
