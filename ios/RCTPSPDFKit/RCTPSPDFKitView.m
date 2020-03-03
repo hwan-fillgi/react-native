@@ -19,7 +19,6 @@
 #import <AWSS3/AWSS3TransferUtility.h>
 #import <AWSCognito/AWSCognito.h>
 #import <PDFKit/PDFKit.h>
-#import "Instant.h"
 #import "OverlayViewController.h"
 #import "RCTPSPDFKitViewManager.h"
 #import "CollaboViewController.h"
@@ -51,7 +50,20 @@
 
 @end
 
+@import SocketIO;
 @implementation RCTPSPDFKitView
+
+//+(RCTPSPDFKitView *) theSettingsData {
+//    static RCTPSPDFKitView *theSettingsData = nil;
+//    if (!theSettingsData) {
+//        theSettingsData = [[super allocWithZone:nil] init];
+//    }
+//    return theSettingsData;
+//}
+//+(id) allocWithZone:(NSZone *)zone {
+//    return [self theSettingsData];
+//}
+
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
     _instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient]; // 값 읽기
@@ -192,6 +204,8 @@
      [topControllerView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
      [topControllerView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
    ]];
+    
+  [self receivePage];
 }
 
 - (void)destroyViewControllerRelationship {
@@ -199,6 +213,152 @@
     [self.topController willMoveToParentViewController:nil];
     [self.topController removeFromParentViewController];
   }
+}
+
+- (void)receivePage {
+  NSLog(@"receivePage");
+  [self.socket on:@"receivePage" callback:^(NSArray* data, SocketAckEmitter* ack) {
+      NSLog(@"close notedddddddddddd %@", data);
+      NSString *recPage = [data firstObject];
+      if ([recPage isEqualToString:@"page"]) {
+          self.overlayViewController = [OverlayViewController new];
+          self.overlayViewController.pdfController = self.pdfController;
+          self.overlayViewController.overlayWidth = self.mynumber;
+          self.pdfController.overlayViewController = self.overlayViewController;
+
+          id<PSPDFInstantDocumentDescriptor> instantDescriptor = [[RCTPSPDFKitViewManager theSettingsData] instantDescriptor]; // 값 읽기
+          self.JWT = [[RCTPSPDFKitViewManager theSettingsData] JWT]; // 값 읽기
+
+          NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
+          NSData *docData = [NSData dataWithContentsOfURL:docURL];
+
+          NSError *error;
+          NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+          NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+
+          NSMutableDictionary *json = [NSMutableDictionary dictionaryWithCapacity:1];
+          NSNumber *someNumber = [NSNumber numberWithInt:0];
+          [json setObject:@"importDocument" forKey:@"type"];
+          [json setObject:@"5ce11b7c-0726-48a2-a493-1cf4f92f26c5" forKey:@"document"];
+          [json setObject:someNumber forKey:@"afterPageIndex"];
+
+          NSArray *array = @[json];
+          NSLog(@"testjson %@", array);
+          NSDictionary *postJson = [NSDictionary dictionaryWithObject:array forKey:@"operations"];
+
+          NSData *jsonData = [NSJSONSerialization dataWithJSONObject:postJson options:NSJSONWritingPrettyPrinted error:&error];
+
+          NSString *requestUrl = [NSString stringWithFormat:@"%@%@%@", @"http://54.153.15.96/api/documents/", instantDescriptor.identifier, @"/apply_operations"];
+
+          NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:requestUrl]];
+          [request setHTTPMethod:@"POST"];
+          NSString *boundary = @"customboundary";
+          NSString *contentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@",boundary];
+          [request setValue:contentType forHTTPHeaderField: @"Content-Type"];
+          [request setValue:@"Token token=secret" forHTTPHeaderField:@"Authorization"];
+
+          NSMutableData *body = [NSMutableData data];
+
+          // json
+          [body appendData:[[NSString stringWithFormat:@"\r\n--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+          [body appendData:[[NSString stringWithFormat:@"Content-Disposition: attachment; name=\"operations\"; filename=\"%@\"\r\n", @"operations.json"] dataUsingEncoding:NSUTF8StringEncoding]];
+          [body appendData:[@"Content-Type: application/json\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+          [body appendData:[NSData dataWithData:jsonData]];
+          [body appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+
+          // file
+          [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+          [body appendData:[[NSString stringWithFormat:@"Content-Disposition: attachment; name=\"5ce11b7c-0726-48a2-a493-1cf4f92f26c5\"; filename=\"%@\"\r\n", @"note.pdf"] dataUsingEncoding:NSUTF8StringEncoding]];
+          [body appendData:[@"Content-Type: application/pdf\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+          [body appendData:[NSData dataWithData:docData]];
+          [body appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
+
+          // close form
+          [body appendData:[[NSString stringWithFormat:@"--%@--", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
+
+          NSString *bb = [[NSString alloc] initWithData:body encoding:NSASCIIStringEncoding];
+          NSLog(@"setHTTPBody %@", bb);
+          // set request body
+          [request setHTTPBody:body];
+
+          // dataTask 생성
+          NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+              if (data!=nil)
+              {
+                  NSString* str = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+
+                  NSLog(@"result %@", str);
+                  NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                  NSLog(@"result %@", json);
+
+                  self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
+                  self.instantClient.delegate = self;
+
+                  [self.instantClient removeLocalStorageForDocumentIdentifier:instantDescriptor.identifier error:&error];
+
+                  // 기본 구성에 URLSession 생성
+                  NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+                  NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+                  // request URL 설정
+                  NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
+                  NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
+
+                  NSLog(@"noteId %@", self.noteId);
+                  // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+                  NSString *postParams = [NSString stringWithFormat:@"note_id=%@", self.noteId];
+                  NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+                  // 셋
+                  [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+                  [urlRequest setHTTPMethod:@"POST"];
+                  [urlRequest setHTTPBody:documentData];
+
+                  // dataTask 생성
+                  NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+                      if (data!=nil)
+                      {
+                          NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+                          NSString *token = [json objectForKey:@"token"];
+
+                          NSLog(@"data token %@", token);
+                          if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                              NSLog(@"success");
+                              dispatch_async(dispatch_get_main_queue(), ^{
+                                  NSError *error;
+
+                                  //self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
+                                  if (token == nil || [token isEqual:[NSNull null]]) {
+                                  } else {
+                                      id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
+                                      if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                                          NSLog(@"documentDescriptor success");
+                                          dispatch_async(dispatch_get_main_queue(), ^{
+                                              NSError *error;
+                                              [NSFileManager.defaultManager createDirectoryAtURL:PSPDFInstantClient.dataDirectory withIntermediateDirectories:YES attributes:@{NSFileProtectionKey: NSFileProtectionComplete} error:&error];
+
+                                              PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
+                                              self.pdfController.document = pdfDocument;
+                                          });
+                                      } else {
+                                          NSLog(@"documentDescriptor token %@",  self.JWT);
+                                          NSLog(@"error: %@", error);
+                                          NSLog(@"documentDescriptor failed");
+                                      }
+                                  }
+                              });
+                          }
+                      } else {
+                          NSLog(@"error");
+                      }
+                  }];
+                  [dataTask resume];
+              } else {
+                  NSLog(@"error");
+              }
+          }];
+          [dataTask resume];
+      }
+  }];
 }
 
 - (void)closeNote {
@@ -228,146 +388,9 @@
 
 - (void)closeButtonPressed:(nullable id)sender {
     [self closeNote];
-//    if ([self.noteType isEqualToString:@"viewer"]) {
-//        [self closeNote];
-//    } else{
-//        UIAlertController *alertController = [UIAlertController alertControllerWithTitle:@"Fillgi Says" message:@"Do you want to save the note?" preferredStyle:UIAlertControllerStyleAlert];
-//
-//        UIAlertAction *ok = [UIAlertAction actionWithTitle:@"Yes" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
-//        {
-//            NSLog(@"제발 되라 %@", self.documents);
-//            NSString *jsonString = NULL;
-//            if (!(self.documents == nil || [self.documents isEqual:[NSNull null]])) {
-//                NSLog(@"제발 되라3 %@", self.documents);
-//                NSData *jsonData = [NSJSONSerialization dataWithJSONObject:self.documents options:NSJSONWritingPrettyPrinted error:nil];
-//                jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
-//            }
-//
-//            NSLog(@"json %@", jsonString);
-//
-//            // ProgressBar Start
-//            [self.loadingView setCenter:self.center];
-//            [self addSubview:self.loadingView];
-//            self.activityIndicator.hidden= FALSE;
-//            [self.activityIndicator startAnimating];
-//
-//            PSPDFDocument *document = self.pdfController.document;
-//            if (!document) return;
-//            PSPDFDocumentEditor *editor = [[PSPDFDocumentEditor alloc] initWithDocument:document];
-//            if (!editor) return;
-//
-//            NSURL *fileURL = self.pdfController.document.fileURL;
-//            NSString *uploadURL = [NSString stringWithFormat:@"%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/upload/", self.noteId, @".pdf"];
-//            NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", @"upload/", self.noteId, @".pdf"];
-//            NSString *imageValue = [NSString stringWithFormat:@"%@%@%@", @"right_image/", self.noteId, @".png"];
-//            NSString *imgValue = [NSString stringWithFormat:@"%@%@", self.noteId, @".png"];
-//
-//            // Create path.
-//            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
-//            NSString *filePath = [[paths objectAtIndex:0] stringByAppendingPathComponent:imgValue];
-//            NSURL *rightImage = [[NSURL alloc] initFileURLWithPath:filePath];
-//
-//            AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
-//            expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
-//                dispatch_async(dispatch_get_main_queue(), ^{
-//                    // Do something e.g. Update a progress bar.
-//                    NSLog(@"progressz");
-//                });
-//            };
-//
-//            AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
-//                    dispatch_async(dispatch_get_main_queue(), ^{
-//                        NSLog(@"File upload completed");
-//                        // 기본 구성에 URLSession 생성
-//                        NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-//                        NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
-//                        // request URL 설정
-//                        NSURL *url = url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/note"];
-//                        NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:url];
-//
-//                        // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
-//                        NSString *postParams = [NSString stringWithFormat:@"right_pdf=%@&note_id=%@&left_pdf=%@", uploadURL, self.noteId, jsonString];
-//                        NSData *postData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
-//
-//                        // 셋
-//                        [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
-//                        [urlRequest setHTTPMethod:@"POST"];
-//                        [urlRequest setHTTPBody:postData];
-//
-//                        // dataTask 생성
-//                        NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-//                            if (data!=nil)
-//                            {
-//                                NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-//                                NSLog(@"result %@", [json objectForKey:@"result"]);
-//                                self.result = [json objectForKey:@"result"];
-//                                if([[json objectForKey:@"result"] isEqualToString:@"success"]){
-//                                    NSLog(@"success");
-//                                    dispatch_async(dispatch_get_main_queue(), ^{
-//                                        [self.activityIndicator stopAnimating];
-//                                        self.activityIndicator.hidden= TRUE;
-//                                        [self closeNote];
-//                                    });
-//                                }
-//                            } else {
-//                                NSLog(@"error");
-//                            }
-//                        }];
-//                        [dataTask resume];
-//                    });
-//             };
-//
-//            AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
-//
-//            // Save and overwrite the document.
-//            [editor saveWithCompletionBlock:^(PSPDFDocument *savedDocument, NSError *error) {
-//                if (error) {
-//                    NSLog(@"Document editing failed: %@", error);
-//                    return;
-//                }
-//                // Access the UI on the main thread.
-//                dispatch_async(dispatch_get_main_queue(), ^{
-//                    PDFView * pdfView = [[PDFView alloc] initWithFrame : CGRectMake(0, 0, 424, 600)];
-//                    pdfView.document = [[PDFDocument alloc] initWithURL : [NSURL fileURLWithPath : savedDocument.fileURL.path]];
-//
-//                    UIImage *thumbnailImage = [[pdfView.document pageAtIndex:0] thumbnailOfSize:CGSizeMake(424, 600) forBox:kPDFDisplayBoxMediaBox];
-//                    // Save image.
-//                    if ([UIImagePNGRepresentation(thumbnailImage) writeToFile:filePath atomically:YES]) {
-//                        NSLog(@"Success");
-//                        [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-//                            if (task.error) {
-//                                NSLog(@"Error: %@", task.error);
-//                            }
-//                            if (task.result) {
-//                                // Do something with uploadTask.
-//                            }
-//                            return nil;
-//                        }];
-//
-//                        [[transferUtility uploadFile:rightImage bucket:@"fillgi-prod-image" key:imageValue contentType:@"image/png" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-//                            if (task.error) {
-//                                NSLog(@"Error: %@", task.error);
-//                            }
-//                            if (task.result) {
-//                                // Do something with uploadTask.
-//                            }
-//                            return nil;
-//                        }];
-//                    }
-//                    else{
-//                        NSLog(@"Error");
-//                    }
-//                });
-//            }];
-//        }];
-//        UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"No" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action){
-//            [self closeNote];
-//        }];
-//        [alertController addAction:ok];
-//        [alertController addAction:cancel];
-//
-//        [self.pdfController presentViewController:alertController animated:YES completion:nil];
-//    }
+    if ([self.noteType isEqualToString:@"viewer"]) {
+    } else{
+    }
 }
 
 - (void)setPlay:(NSNotification *)noti{
@@ -385,145 +408,7 @@
 
 - (void)addPages:(nullable id)sender {
     NSLog(@"addPages");
-    double i = [self.mynumber doubleValue];
-    NSLog(@"self.mynumber doubleValue %f", i);
-    
-    self.overlayViewController = [OverlayViewController new];
-    self.overlayViewController.pdfController = self.pdfController;
-    self.overlayViewController.overlayWidth = self.mynumber;
-    self.pdfController.overlayViewController = self.overlayViewController;
-    
-    id<PSPDFInstantDocumentDescriptor> instantDescriptor = [[RCTPSPDFKitViewManager theSettingsData] instantDescriptor]; // 값 읽기
-    self.JWT = [[RCTPSPDFKitViewManager theSettingsData] JWT]; // 값 읽기
-    
-    NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
-    NSData *docData = [NSData dataWithContentsOfURL:docURL];
-    
-    NSError *error;
-    NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
-    
-    NSMutableDictionary *json = [NSMutableDictionary dictionaryWithCapacity:1];
-    NSNumber *someNumber = [NSNumber numberWithInt:0];
-    [json setObject:@"importDocument" forKey:@"type"];
-    [json setObject:@"5ce11b7c-0726-48a2-a493-1cf4f92f26c5" forKey:@"document"];
-    [json setObject:someNumber forKey:@"afterPageIndex"];
-    
-    NSArray *array = @[json];
-    NSLog(@"testjson %@", array);
-    NSDictionary *postJson = [NSDictionary dictionaryWithObject:array forKey:@"operations"];
-    
-    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:postJson options:NSJSONWritingPrettyPrinted error:&error];
-    
-    NSString *requestUrl = [NSString stringWithFormat:@"%@%@%@", @"http://54.153.15.96/api/documents/", instantDescriptor.identifier, @"/apply_operations"];
-    
-    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:requestUrl]];
-    [request setHTTPMethod:@"POST"];
-    NSString *boundary = @"customboundary";
-    NSString *contentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@",boundary];
-    [request setValue:contentType forHTTPHeaderField: @"Content-Type"];
-    [request setValue:@"Token token=secret" forHTTPHeaderField:@"Authorization"];
-
-    NSMutableData *body = [NSMutableData data];
-
-    // json
-    [body appendData:[[NSString stringWithFormat:@"\r\n--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: attachment; name=\"operations\"; filename=\"%@\"\r\n", @"operations.json"] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[@"Content-Type: application/json\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[NSData dataWithData:jsonData]];
-    [body appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-    
-    // file
-    [body appendData:[[NSString stringWithFormat:@"--%@\r\n", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[[NSString stringWithFormat:@"Content-Disposition: attachment; name=\"5ce11b7c-0726-48a2-a493-1cf4f92f26c5\"; filename=\"%@\"\r\n", @"note.pdf"] dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[@"Content-Type: application/pdf\r\n\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-    [body appendData:[NSData dataWithData:docData]];
-    [body appendData:[@"\r\n" dataUsingEncoding:NSUTF8StringEncoding]];
-    
-    // close form
-    [body appendData:[[NSString stringWithFormat:@"--%@--", boundary] dataUsingEncoding:NSUTF8StringEncoding]];
-    
-    NSString *bb = [[NSString alloc] initWithData:body encoding:NSASCIIStringEncoding];
-    NSLog(@"setHTTPBody %@", bb);
-    // set request body
-    [request setHTTPBody:body];
-
-    // dataTask 생성
-    NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        if (data!=nil)
-        {
-            NSString* str = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-
-            NSLog(@"result %@", str);
-            NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-            NSLog(@"result %@", json);
-
-            self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
-            self.instantClient.delegate = self;
-            
-            [self.instantClient removeLocalStorageForDocumentIdentifier:instantDescriptor.identifier error:&error];
-            
-            // 기본 구성에 URLSession 생성
-            NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-            NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
-            // request URL 설정
-            NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
-            NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
-
-            NSLog(@"noteId %@", self.noteId);
-            // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
-            NSString *postParams = [NSString stringWithFormat:@"note_id=%@", self.noteId];
-            NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
-
-            // 셋
-            [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
-            [urlRequest setHTTPMethod:@"POST"];
-            [urlRequest setHTTPBody:documentData];
-
-            // dataTask 생성
-            NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-                if (data!=nil)
-                {
-                    NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-                    NSString *token = [json objectForKey:@"token"];
-                    
-                    NSLog(@"data token %@", token);
-                    if([[json objectForKey:@"result"] isEqualToString:@"success"]){
-                        NSLog(@"success");
-                        dispatch_async(dispatch_get_main_queue(), ^{
-                            NSError *error;
-
-                            //self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
-                            if (token == nil || [token isEqual:[NSNull null]]) {
-                            } else {
-                                id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
-                                if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
-                                    NSLog(@"documentDescriptor success");
-                                    dispatch_async(dispatch_get_main_queue(), ^{
-                                        NSError *error;
-                                        [NSFileManager.defaultManager createDirectoryAtURL:PSPDFInstantClient.dataDirectory withIntermediateDirectories:YES attributes:@{NSFileProtectionKey: NSFileProtectionComplete} error:&error];
-
-                                        PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
-                                        self.pdfController.document = pdfDocument;
-                                    });
-                                } else {
-                                    NSLog(@"documentDescriptor token %@",  self.JWT);
-                                    NSLog(@"error: %@", error);
-                                    NSLog(@"documentDescriptor failed");
-                                }
-                            }
-                        });
-                    }
-                } else {
-                    NSLog(@"error");
-                }
-            }];
-            [dataTask resume];
-        } else {
-            NSLog(@"error");
-        }
-    }];
-    [dataTask resume];
+    [self.socket emit:@"msg" with:@[@{@"comment": @"noteId"}]];
 }
 
 - (void)addDocuments:(nullable id)sender {

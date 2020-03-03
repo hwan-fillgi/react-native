@@ -10,8 +10,9 @@
 #import <UIKit/UIKit.h>
 #import <React/RCTComponent.h>
 #import "PSCCustomUserInterfaceView.h"
-#import "Instant.h"
 
+@import Instant;
+@import SocketIO;
 @import PSPDFKit;
 @import PSPDFKitUI;
 
@@ -21,6 +22,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 //@property (nonatomic, retain) PSPDFViewController *pdfController;
 @property (nonatomic, retain) PSPDFInstantViewController *pdfController;
+@property (nonatomic, nullable) SocketManager *manager;
+@property (nonatomic, nullable) SocketIOClient *socket;
 @property (nonatomic) BOOL hideNavigationBar;
 @property (nonatomic, retain) UIBarButtonItem *closeButton;
 @property (nonatomic, retain) UIBarButtonItem *addButton;
@@ -46,7 +49,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, nullable) NSMutableArray *documents;
 @property (nonatomic, nullable) PSCCustomUserInterfaceView *customView;
 @property (nonatomic, nullable) UIEdgeInsets *contentInsets;
-
 
 /// Annotation Toolbar
 - (BOOL)enterAnnotationCreationMode;

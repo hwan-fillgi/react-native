@@ -16,8 +16,9 @@
 #import "RCTPSPDFKitView.h"
 #import <React/RCTUIManager.h>
 #import "PSCCustomUserInterfaceView.h"
-#import "Instant.h"
 
+@import Instant;
+@import SocketIO;
 @import PSPDFKit;
 @import PSPDFKitUI;
 @interface RCTPSPDFKitViewManager ()
@@ -62,7 +63,14 @@ RCT_EXPORT_MODULE()
 RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
   if (json) {
       NSLog(@"start");
-      NSURL* url = [[NSURL alloc] initWithString:@"http://localhost:8080"];
+      // socket.io 양방향 통신
+      NSURL* url = [[NSURL alloc] initWithString:@"http://52.53.171.183:3000/"];
+      view.manager = [[SocketManager alloc] initWithSocketURL:url config:@{@"log": @YES, @"compress": @YES}];
+      view.socket = view.manager.defaultSocket;
+      
+      [view.socket connect];
+      
+      self.socket = view.socket;
       
       self.viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
       
@@ -293,6 +301,7 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                                 }];
                             });
                         } else {
+                            [view.socket emit:@"joinRoom" with:@[@{@"roomName": noteId}]];
                             NSError *error;
 
                             self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];

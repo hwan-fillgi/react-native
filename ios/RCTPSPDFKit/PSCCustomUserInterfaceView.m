@@ -6,9 +6,9 @@
 #import "RCTConvert+UIBarButtonItem.h"
 #import "RCTConvert+PSPDFConfiguration.h"
 #import "RCTPSPDFKitViewManager.h"
-#import "Instant.h"
 #import <AWSS3/AWSS3TransferUtility.h>
 
+@import Instant;
 @interface PSCCustomUserInterfaceView () <PSPDFTabbedViewControllerDelegate, UIDocumentPickerDelegate, PSPDFInstantClientDelegate>
 
 @property (nonatomic, nullable) PSPDFDocument *document;
@@ -19,6 +19,9 @@
 @property (nonatomic, nullable) NSString* JWT;
 @property (nonatomic, nullable) PSPDFInstantViewController *instantViewController;
 @property (nonatomic, nullable) PSPDFInstantClient *instantClient;
+@property (nonatomic, nullable) SocketIOClient *socket;
+@property (nonatomic) Boolean sendFlag;
+@property (nonatomic) Boolean closeFlag;
 
 @end
 
@@ -26,6 +29,7 @@
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
     self.noteId = [[RCTPSPDFKitViewManager theSettingsData] version]; // 값 읽기
+    self.socket = [[RCTPSPDFKitViewManager theSettingsData] socket];
     NSLog(@"mVersion %@", self.noteId);
     
     AWSCognitoCredentialsProvider *credentialsProvider = [[AWSCognitoCredentialsProvider alloc]
@@ -63,6 +67,127 @@
         builder.documentLabelEnabled = NO;
     }];
       
+    [self loadPDF];
+      
+    _navigationController = [[UINavigationController alloc] initWithRootViewController:self.tabController];
+    _navigationController.view.translatesAutoresizingMaskIntoConstraints = NO;
+    _navigationController.navigationBarHidden = true;
+
+    //_navigationController.navigationBar.hidden = true;
+    [self addSubview:self.navigationController.view];
+
+    UIImageView *imageView = [[UIImageView alloc]init];
+    [imageView setImage:[PSPDFKitGlobal imageNamed:@"scroll_bar"]];
+    [imageView sizeToFit];
+    imageView.userInteractionEnabled = YES;
+    imageView.center = CGPointMake(self.navigationController.view.frame.size.width / 2, self.navigationController.view.frame.size.height / 2);
+    [self addSubview:imageView];
+
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
+    [imageView addGestureRecognizer:pan];
+
+    CGSize statusBarSize = [[UIApplication sharedApplication] statusBarFrame].size;
+
+    [NSLayoutConstraint activateConstraints:
+        @[[self.navigationController.view.topAnchor constraintEqualToAnchor:self.topAnchor constant:self.navigationController.navigationBar.frame.size.height + statusBarSize.height],
+        [self.navigationController.view.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+        [self.navigationController.view.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [self.navigationController.view.trailingAnchor constraintEqualToAnchor:imageView.centerXAnchor]
+        ]];
+      
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTim:) name:@"setPlaytims" object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTi:) name:@"setPlaytis" object:nil];
+      
+    NSNumber* num1 = [NSNumber numberWithDouble:self.navigationController.view.frame.size.width / 2];
+    NSDictionary *notiDic=nil;
+    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTime", nil];
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
+  }
+    
+  [self.socket on:@"recMsg" callback:^(NSArray* data, SocketAckEmitter* ack) {
+      NSLog(@"self.sendFlag : %@", (self.sendFlag ? @"YES" : @"NO"));
+      if (self.sendFlag == NO) {
+          NSLog(@"socket connected %@", data);
+          NSString *method = [data firstObject];
+          NSLog(@"method %@", method);
+          
+          NSFileManager *fileManager = [NSFileManager defaultManager];
+          NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+          NSString *filePath = [resourceDocPath stringByAppendingPathComponent:method];
+          if ([fileManager fileExistsAtPath:filePath]){
+              NSLog(@"file exist");
+          } else{
+              NSLog(@"file not exist");
+              NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/", self.noteId, @"/", method];
+              NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+              NSLog(@"viewer escapedPath: %@", pdfURL);
+              NSURL *url = [NSURL URLWithString:escapedPath];
+
+              // Get the PDF Data from the url in a NSData Object
+              NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
+              if (pdfData) {
+                  NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+                  NSString *filePath = [resourceDocPath stringByAppendingPathComponent:method];
+                  [pdfData writeToFile:filePath atomically:YES];
+              }
+          }
+          NSLog(@"self.documents 111111 %@", self.documents);
+          NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+          PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+          [self.documents addObject:document];
+          NSLog(@"self.documents %@", self.documents);
+          self.tabController.documents = [self.documents copy];
+      } else {
+          self.sendFlag = NO;
+      }
+  }];
+    
+  [self.socket on:@"recClose" callback:^(NSArray* data, SocketAckEmitter* ack) {
+      if (self.closeFlag == NO) {
+          self.documents = [NSMutableArray new];
+          NSLog(@"self.sendFlag : %@", (self.sendFlag ? @"YES" : @"NO"));
+          NSDictionary *avatar = [data objectAtIndex:0];
+          NSArray *avatarimage = [avatar objectForKey:@"pdf"];
+          NSLog(@"GET JSON %@", avatarimage);
+          if (avatarimage) {
+              for (int i = 0; i < avatarimage.count; i++) {
+                  NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+                  NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[avatarimage objectAtIndex:i]];
+                  NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+                  PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                  [self.documents addObject:document];
+              }
+
+              NSLog(@"self.documents %@",  self.documents);
+              self.tabController.documents = [self.documents copy];
+          }
+      } else {
+          self.closeFlag = NO;
+      }
+  }];
+  return self;
+}
+
+- (void)handlePan:(UIPanGestureRecognizer *)recognizer {
+
+    CGPoint translation = [recognizer translationInView:self];
+    recognizer.view.center = CGPointMake(recognizer.view.center.x + translation.x,
+                                         recognizer.view.center.y + 0);
+
+    [NSLayoutConstraint activateConstraints:
+        @[[self.navigationController.view.trailingAnchor constraintEqualToAnchor:recognizer.view.centerXAnchor]
+        ]];
+    [recognizer setTranslation:CGPointZero inView:self];
+    
+    double f1 = recognizer.view.center.x + translation.x;
+    NSNumber* num1 = [NSNumber numberWithDouble:f1];
+    NSDictionary *notiDic=nil;
+    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTime", nil];
+    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
+}
+
+- (void)loadPDF {
+    NSLog(@"laod pdf");
     // 왼쪽 pdf 불러오는 부분
     self.noteId = [self.noteId stringByReplacingOccurrencesOfString:@"%20" withString:@" "];
 
@@ -151,65 +276,12 @@
 
     // Begin task.
     [task resume];
-      
-    _navigationController = [[UINavigationController alloc] initWithRootViewController:self.tabController];
-    _navigationController.view.translatesAutoresizingMaskIntoConstraints = NO;
-    _navigationController.navigationBarHidden = true;
-
-    //_navigationController.navigationBar.hidden = true;
-    [self addSubview:self.navigationController.view];
-
-    UIImageView *imageView = [[UIImageView alloc]init];
-    [imageView setImage:[PSPDFKitGlobal imageNamed:@"scroll_bar"]];
-    [imageView sizeToFit];
-    imageView.userInteractionEnabled = YES;
-    imageView.center = CGPointMake(self.navigationController.view.frame.size.width / 2, self.navigationController.view.frame.size.height / 2);
-    [self addSubview:imageView];
-
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
-    [imageView addGestureRecognizer:pan];
-
-    CGSize statusBarSize = [[UIApplication sharedApplication] statusBarFrame].size;
-
-    [NSLayoutConstraint activateConstraints:
-        @[[self.navigationController.view.topAnchor constraintEqualToAnchor:self.topAnchor constant:self.navigationController.navigationBar.frame.size.height + statusBarSize.height],
-        [self.navigationController.view.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        [self.navigationController.view.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [self.navigationController.view.trailingAnchor constraintEqualToAnchor:imageView.centerXAnchor]
-        ]];
-      
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTim:) name:@"setPlaytims" object:nil];
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTi:) name:@"setPlaytis" object:nil];
-      
-    NSNumber* num1 = [NSNumber numberWithDouble:self.navigationController.view.frame.size.width / 2];
-    NSDictionary *notiDic=nil;
-    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTime", nil];
-    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
-  }
-  return self;
-}
-
-- (void)handlePan:(UIPanGestureRecognizer *)recognizer {
-
-    CGPoint translation = [recognizer translationInView:self];
-    recognizer.view.center = CGPointMake(recognizer.view.center.x + translation.x,
-                                         recognizer.view.center.y + 0);
-
-    [NSLayoutConstraint activateConstraints:
-        @[[self.navigationController.view.trailingAnchor constraintEqualToAnchor:recognizer.view.centerXAnchor]
-        ]];
-    [recognizer setTranslation:CGPointZero inView:self];
-    
-    double f1 = recognizer.view.center.x + translation.x;
-    NSNumber* num1 = [NSNumber numberWithDouble:f1];
-    NSDictionary *notiDic=nil;
-    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTime", nil];
-    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
 }
 
 // 파일선택 하는 부분
 #pragma mark - iCloud files
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
+    //self.sendFlag = NO;
     NSURL *fileURL = url;
     NSString *filename = url.lastPathComponent;
     NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", self.noteId, @"/", filename];
@@ -225,6 +297,7 @@
     AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSLog(@"File upload completed");
+                [self.socket emit:@"pdf" with:@[@{@"comment": filename}]];
             });
      };
 
@@ -236,6 +309,7 @@
         }
         if (task.result) {
             // Do something with uploadTask.
+            self.sendFlag = YES;
         }
         return nil;
     }];
@@ -345,7 +419,22 @@
 }
 
 - (void)tabbedPDFController:(PSPDFTabbedViewController *)tabbedPDFController didCloseDocument:(PSPDFDocument *)document{
-    NSLog(@"document CLOSE");
+    NSLog(@"document CLOSE %@", document);
+    self.saveFile = [NSMutableArray new];
+    NSLog(@"document save %@", self.tabController.documents);
+    for (int i = 0; i < self.tabController.documents.count; i++) {
+        NSLog(@"document save %@", self.tabController.documents[i].fileName);
+        [self.saveFile addObject:self.tabController.documents[i].fileName];
+    }
+    NSDictionary *jsonDictionary = [NSDictionary dictionaryWithObjectsAndKeys:
+    self.saveFile, @"pdf",
+    nil];
+    
+    NSMutableArray * arr = [[NSMutableArray alloc] init];
+
+    [arr addObject:jsonDictionary];
+    [self.socket emit:@"close" with:arr];
+    self.closeFlag = YES;
     [self saveDocuments:self.documents];
 }
 
