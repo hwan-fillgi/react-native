@@ -25,7 +25,7 @@
 
 #define VALIDATE_DOCUMENT(document, ...) { if (!document.isValid) { NSLog(@"Document is invalid."); if (self.onDocumentLoadFailed) { self.onDocumentLoadFailed(@{@"error": @"Document is invalid."}); } return __VA_ARGS__; }}
 
-@interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate, PSPDFInstantClientDelegate>
+@interface RCTPSPDFKitView ()<PSPDFDocumentDelegate, PSPDFViewControllerDelegate, PSPDFFlexibleToolbarContainerDelegate, PSPDFInstantClientDelegate, UIApplicationDelegate>
 
 @property (nonatomic, nullable) NSString *result;
 @property (nonatomic, nullable) UIViewController *controller;
@@ -47,6 +47,7 @@
 @property (nonatomic, nullable) OverlayViewController *overlayViewController;
 @property (nonatomic, nullable) NSString *insets;
 @property (nonatomic, nullable) NSString* JWT;
+@property (nonatomic, nullable) CollaboViewController *collaboViewController;
 
 @end
 
@@ -140,13 +141,12 @@
 }
 
 - (void)didMoveToWindow {
-//    NSLog(@"note type type %@", self.noteType);
-//    if ([self.noteType isEqualToString:@"viewer"]) {
-//        [self.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
-//            [builder setInternalTapGesturesEnabled:NO];
-//        }];
-//    }
-    
+    NSLog(@"note type type %@", self.noteType);
+    if ([self.noteType isEqualToString:@"viewer"]) {
+        [self.pdfController updateConfigurationWithoutReloadingWithBuilder:^(PSPDFConfigurationBuilder *builder) {
+            [builder setInternalTapGesturesEnabled:NO];
+        }];
+    }
     // On iOS 13 and later.
     if (@available(iOS 13, *)) {
         // `UINavigationBar` styling.
@@ -218,7 +218,6 @@
 - (void)receivePage {
   NSLog(@"receivePage");
   [self.socket on:@"receivePage" callback:^(NSArray* data, SocketAckEmitter* ack) {
-      NSLog(@"close notedddddddddddd %@", data);
       NSString *recPage = [data firstObject];
       if ([recPage isEqualToString:@"page"]) {
           self.overlayViewController = [OverlayViewController new];
@@ -390,6 +389,7 @@
     [self closeNote];
     if ([self.noteType isEqualToString:@"viewer"]) {
     } else{
+        [self.socket disconnect];
     }
 }
 
@@ -399,11 +399,16 @@
     [self.documents addObjectsFromArray:[notiDic objectForKey:@"play"]];
 }
 
+- (void)presentViewController:(UIViewController *)viewControllerToPresent animated:(BOOL)flag completion:(void (^)(void))completion{
+    
+}
+
 - (void)collaboList:(nullable id)sender {
     NSLog(@"collaboList");
-    CollaboViewController *collaboViewController = [CollaboViewController new];
-    collaboViewController.modalPresentationStyle = UIModalPresentationCustom;
-    [self.topController presentViewController:collaboViewController animated:NO completion:nil];
+    self.collaboViewController = [CollaboViewController new];
+    self.collaboViewController.modalPresentationStyle = UIModalPresentationCustom;
+    
+    [self.topController presentViewController:self.collaboViewController animated:YES completion:nil];
 }
 
 - (void)addPages:(nullable id)sender {
@@ -878,4 +883,16 @@
     self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
 }
 
+// 어플리케이션이 종료될때
+- (void)applicationWillTerminate:(UIApplication *)application
+{
+    // Called when the application is about to terminate.
+    // Save data if appropriate. See also applicationDidEnterBackground:.
+    // (애플리케이션이 막 종료되려고 할 때 호출된다. 필요하다면 데이터를 저장한다. applicationDidEnterBackground: 메서드와 함께 참고한다)
+    NSError *error;
+    self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
+    [self.instantClient removeLocalStorageWithError:&error];
+    
+    [self.socket disconnect];
+}
 @end

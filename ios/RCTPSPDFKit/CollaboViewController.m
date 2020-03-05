@@ -14,7 +14,7 @@
 #import "RCTPSPDFKitViewManager.h"
 #import "CollaboViewController.h"
 
-@interface CollaboViewController ()
+@interface CollaboViewController () <UIGestureRecognizerDelegate>
 
 @property (nonatomic) UILabel *label;
 @property (nonatomic) UITextField *textField;
@@ -22,6 +22,7 @@
 
 @property (nonatomic, nullable) UIView *stackView;
 @property (nonatomic, nullable) UIImage *closeImage;
+@property (strong, nonatomic) UITapGestureRecognizer *tapOutsideRecognizer;
 
 @end
 
@@ -50,9 +51,67 @@
     [closeImage addGestureRecognizer:closeTap];
     
     UIPanGestureRecognizer *moveView = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleView:)];
-    [self.stackView addGestureRecognizer:moveView];
+    
+    self.view.frame = CGRectMake(0, 0, 350, 600);
+    self.view.backgroundColor = [UIColor redColor];
+    self.view.userInteractionEnabled = YES;
+    self.view.center = CGPointMake(self.view.frame.size.width / 2, self.view.frame.size.height / 2);
+    
+    [self.view addGestureRecognizer:moveView];
     
     [self.view addSubview:self.stackView];
+}
+
+-(void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    if (!self.tapOutsideRecognizer) {
+        self.tapOutsideRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTapBehind:)];
+        self.tapOutsideRecognizer.numberOfTapsRequired = 1;
+        self.tapOutsideRecognizer.cancelsTouchesInView = NO;
+        self.tapOutsideRecognizer.delegate = self;
+        [self.view.window addGestureRecognizer:self.tapOutsideRecognizer];
+    }
+}
+
+-(void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    // to avoid nasty crashes
+    if (self.tapOutsideRecognizer) {
+        [self.view.window removeGestureRecognizer:self.tapOutsideRecognizer];
+        self.tapOutsideRecognizer = nil;
+    }
+}
+
+#pragma mark - Actions
+
+- (IBAction)close:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (void)handleTapBehind:(UITapGestureRecognizer *)sender
+{
+    if (sender.state == UIGestureRecognizerStateEnded)
+    {
+        CGPoint location = [sender locationInView:nil]; //Passing nil gives us coordinates in the window
+
+        //Then we convert the tap's location into the local view's coordinate system, and test to see if it's in or outside. If outside, dismiss the view.
+
+        if (![self.view pointInside:[self.view convertPoint:location fromView:self.view.window] withEvent:nil])
+        {
+            // Remove the recognizer first so it's view.window is valid.
+            [self.view.window removeGestureRecognizer:sender];
+            [self close:sender];
+        }
+    }
+}
+
+#pragma mark - Gesture Recognizer
+// because of iOS8
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer{
+    return YES;
 }
 
 - (void)handleView:(UIPanGestureRecognizer *)recognizer {
@@ -61,12 +120,6 @@
                                          recognizer.view.center.y + translation.y);
     
     [recognizer setTranslation:CGPointZero inView:self.view];
-    
-//    double f1 = recognizer.view.center.x + translation.x;
-//    NSNumber* num1 = [NSNumber numberWithDouble:f1];
-//    NSDictionary *notiDic=nil;
-//    notiDic=[[NSDictionary alloc]initWithObjectsAndKeys:num1,@"playTime", nil];
-//    [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytimes" object:nil userInfo:notiDic];
 }
 
 - (void)closeView{

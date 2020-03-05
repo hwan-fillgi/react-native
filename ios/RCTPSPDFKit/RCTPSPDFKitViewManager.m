@@ -301,7 +301,6 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                                 }];
                             });
                         } else {
-                            [view.socket emit:@"joinRoom" with:@[@{@"roomName": noteId}]];
                             NSError *error;
 
                             self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];
@@ -316,6 +315,7 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                                     self.instantDescriptor = documentDescriptor;
                                     PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
                                     view.pdfController.document = pdfDocument;
+                                    [view.socket emit:@"joinRoom" with:@[@{@"roomName": noteId}]];
                                 } else {
                                     NSLog(@"documentDescriptor token %@",  self.JWT);
                                     NSLog(@"error: %@", error);

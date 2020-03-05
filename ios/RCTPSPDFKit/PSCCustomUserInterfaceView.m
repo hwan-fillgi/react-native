@@ -107,36 +107,43 @@
   [self.socket on:@"recMsg" callback:^(NSArray* data, SocketAckEmitter* ack) {
       NSLog(@"self.sendFlag : %@", (self.sendFlag ? @"YES" : @"NO"));
       if (self.sendFlag == NO) {
-          NSLog(@"socket connected %@", data);
-          NSString *method = [data firstObject];
-          NSLog(@"method %@", method);
-          
-          NSFileManager *fileManager = [NSFileManager defaultManager];
-          NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-          NSString *filePath = [resourceDocPath stringByAppendingPathComponent:method];
-          if ([fileManager fileExistsAtPath:filePath]){
-              NSLog(@"file exist");
-          } else{
-              NSLog(@"file not exist");
-              NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/", self.noteId, @"/", method];
-              NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
-              NSLog(@"viewer escapedPath: %@", pdfURL);
-              NSURL *url = [NSURL URLWithString:escapedPath];
-
-              // Get the PDF Data from the url in a NSData Object
-              NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
-              if (pdfData) {
+          self.documents = [NSMutableArray new];
+          NSLog(@"self.sendFlag : %@", (self.closeFlag ? @"YES" : @"NO"));
+          NSDictionary *avatar = [data objectAtIndex:0];
+          NSLog(@"GET JSON %@", avatar);
+          NSArray *avatarimage = [avatar objectForKey:@"pdf"];
+          NSLog(@"GET JSON %@", avatarimage);
+          if (avatarimage) {
+              NSFileManager *fileManager = [NSFileManager defaultManager];
+              for (int i = 0; i < avatarimage.count; i++) {
                   NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-                  NSString *filePath = [resourceDocPath stringByAppendingPathComponent:method];
-                  [pdfData writeToFile:filePath atomically:YES];
+                  NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[avatarimage objectAtIndex:i]];
+                  if ([fileManager fileExistsAtPath:filePath]){
+                      NSLog(@"file exist");
+                  } else{
+                      NSLog(@"file not exist");
+                      NSString *pdfURL = [NSString stringWithFormat:@"%@%@%@%@", @"https://fillgi-prod-image.s3-us-west-1.amazonaws.com/", self.noteId, @"/", [avatarimage objectAtIndex:i]];
+                      NSString *escapedPath = [pdfURL stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]];
+                      NSLog(@"viewer escapedPath: %@", pdfURL);
+                      NSURL *url = [NSURL URLWithString:escapedPath];
+                        
+                      // Get the PDF Data from the url in a NSData Object
+                      NSData *pdfData = [[NSData alloc] initWithContentsOfURL:url];
+                      if (pdfData) {
+                          NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+                          NSString *filePath = [resourceDocPath stringByAppendingPathComponent:[avatarimage objectAtIndex:i]];
+                          [pdfData writeToFile:filePath atomically:YES];
+                      }
+                  }
+                  NSLog(@"viewer filePath: %@", filePath);
+                  NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+                  PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+                  [self.documents addObject:document];
               }
+
+              NSLog(@"self.documents %@",  self.documents);
+              self.tabController.documents = [self.documents copy];
           }
-          NSLog(@"self.documents 111111 %@", self.documents);
-          NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-          PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-          [self.documents addObject:document];
-          NSLog(@"self.documents %@", self.documents);
-          self.tabController.documents = [self.documents copy];
       } else {
           self.sendFlag = NO;
       }
@@ -145,7 +152,7 @@
   [self.socket on:@"recClose" callback:^(NSArray* data, SocketAckEmitter* ack) {
       if (self.closeFlag == NO) {
           self.documents = [NSMutableArray new];
-          NSLog(@"self.sendFlag : %@", (self.sendFlag ? @"YES" : @"NO"));
+          NSLog(@"self.sendFlag : %@", (self.closeFlag ? @"YES" : @"NO"));
           NSDictionary *avatar = [data objectAtIndex:0];
           NSArray *avatarimage = [avatar objectForKey:@"pdf"];
           NSLog(@"GET JSON %@", avatarimage);
@@ -166,6 +173,15 @@
       }
   }];
   return self;
+}
+
+- (void)updateScrubberBarFrameAnimated:(BOOL)animated {
+    [super updateScrubberBarFrameAnimated:animated];
+
+    // Stick scrubber bar to the top.
+    CGRect newFrame = self.dataSource.contentRect;
+    newFrame.size.height = 44.f;
+    self.scrubberBar.frame = newFrame;
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)recognizer {
@@ -297,7 +313,20 @@
     AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
             dispatch_async(dispatch_get_main_queue(), ^{
                 NSLog(@"File upload completed");
-                [self.socket emit:@"pdf" with:@[@{@"comment": filename}]];
+                self.saveFile = [NSMutableArray new];
+                NSLog(@"document save %@", self.tabController.documents);
+                for (int i = 0; i < self.tabController.documents.count; i++) {
+                    NSLog(@"document save %@", self.tabController.documents[i].fileName);
+                    [self.saveFile addObject:self.tabController.documents[i].fileName];
+                }
+                NSDictionary *jsonDictionary = [NSDictionary dictionaryWithObjectsAndKeys:
+                self.saveFile, @"pdf",
+                nil];
+                
+                NSMutableArray * arr = [[NSMutableArray alloc] init];
+
+                [arr addObject:jsonDictionary];
+                [self.socket emit:@"pdf" with:arr];
             });
      };
 
@@ -436,10 +465,6 @@
     [self.socket emit:@"close" with:arr];
     self.closeFlag = YES;
     [self saveDocuments:self.documents];
-}
-
-- (void)updateScrubberBarFrameAnimated:(BOOL)animated {
-    [super updateScrubberBarFrameAnimated:animated];
 }
 
 - (void)updateThumbnailBarFrameAnimated:(BOOL)animated {
