@@ -24,6 +24,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, retain) PSPDFInstantViewController *pdfController;
 @property (nonatomic, nullable) SocketManager *manager;
 @property (nonatomic, nullable) SocketIOClient *socket;
+@property (nonatomic, nullable) PSPDFInstantClient *instantClient;
+@property (nonatomic, nullable) id<PSPDFInstantDocumentDescriptor> instantDescriptor;
+@property (nonatomic, nullable) NSString* JWT;
 @property (nonatomic) BOOL hideNavigationBar;
 @property (nonatomic, retain) UIBarButtonItem *closeButton;
 @property (nonatomic, retain) UIBarButtonItem *addButton;

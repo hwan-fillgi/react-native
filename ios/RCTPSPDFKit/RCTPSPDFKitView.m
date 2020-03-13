@@ -43,10 +43,8 @@
 @property (nonatomic, retain) UILabel *loadingLabel;
 @property (nonatomic, retain) UIView *loadingView;
 @property (nonatomic, retain) UIActivityIndicatorView *pageIndicator;
-@property (nonatomic, nullable) PSPDFInstantClient *instantClient;
 @property (nonatomic, nullable) OverlayViewController *overlayViewController;
 @property (nonatomic, nullable) NSString *insets;
-@property (nonatomic, nullable) NSString* JWT;
 @property (nonatomic, nullable) CollaboViewController *collaboViewController;
 
 @end
@@ -54,20 +52,11 @@
 @import SocketIO;
 @implementation RCTPSPDFKitView
 
-//+(RCTPSPDFKitView *) theSettingsData {
-//    static RCTPSPDFKitView *theSettingsData = nil;
-//    if (!theSettingsData) {
-//        theSettingsData = [[super allocWithZone:nil] init];
-//    }
-//    return theSettingsData;
-//}
-//+(id) allocWithZone:(NSZone *)zone {
-//    return [self theSettingsData];
-//}
-
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
-    _instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient]; // 값 읽기
+    NSError *error;
+    self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];
+    self.instantClient.delegate = self;
       
     UIViewController *viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
       
@@ -88,6 +77,9 @@
     self.loadingLabel.textAlignment = NSTextAlignmentCenter;
     self.loadingLabel.text = @"Saving...";
     [self.loadingView addSubview:self.loadingLabel];
+    
+    self.collaboViewController = [CollaboViewController new];
+    self.collaboViewController.openCollabo = FALSE;
     
     _browser = YES;
     _mainColor = [UIColor blackColor];
@@ -116,13 +108,22 @@
     _addButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add"] style:UIBarButtonItemStylePlain target:self action:@selector(addDocuments:)];
     _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
     _pageButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add-note"] style:UIBarButtonItemStylePlain target:self action:@selector(addPages:)];
-    _collaboButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_getout"] style:UIBarButtonItemStylePlain target:self action:@selector(collaboList:)];
+    _collaboButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_colabo"] style:UIBarButtonItemStylePlain target:self action:@selector(collaboList:)];
+//    UIButton *ArrowSnapCapture  = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 24 , 24)];
+//
+//    [ArrowSnapCapture.widthAnchor constraintEqualToConstant:24].active = YES;
+//    [ArrowSnapCapture.heightAnchor constraintEqualToConstant:24].active = YES;
+//
+//    [ArrowSnapCapture setImage:[PSPDFKitGlobal imageNamed:@"icon_collabo"] forState:UIControlStateNormal];
+//    [ArrowSnapCapture addTarget:self action:@selector(collaboList:) forControlEvents:UIControlEventTouchUpInside];
+//    _collaboButton = [[UIBarButtonItem alloc] initWithCustomView:ArrowSnapCapture];
       
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationChangedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsAddedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(annotationChangedNotification:) name:PSPDFAnnotationsRemovedNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlayTime:) name:@"setPlaytimes" object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlay:) name:@"setPlay" object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setDismiss:) name:@"setPlaytimsss" object:nil];
   }
   
   return self;
@@ -197,6 +198,8 @@
   [self addSubview:topControllerView];
   [self.controller addChildViewController:self.topController];
   [self.topController didMoveToParentViewController:self.controller];
+  self.collaboViewController.topController = self.topController;
+  self.collaboViewController.noteId = self.noteId;
 
   [NSLayoutConstraint activateConstraints:
    @[[topControllerView.topAnchor constraintEqualToAnchor:self.topAnchor],
@@ -224,8 +227,7 @@
           self.overlayViewController.pdfController = self.pdfController;
           self.overlayViewController.overlayWidth = self.mynumber;
           self.pdfController.overlayViewController = self.overlayViewController;
-
-          id<PSPDFInstantDocumentDescriptor> instantDescriptor = [[RCTPSPDFKitViewManager theSettingsData] instantDescriptor]; // 값 읽기
+          
           self.JWT = [[RCTPSPDFKitViewManager theSettingsData] JWT]; // 값 읽기
 
           NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
@@ -247,7 +249,7 @@
 
           NSData *jsonData = [NSJSONSerialization dataWithJSONObject:postJson options:NSJSONWritingPrettyPrinted error:&error];
 
-          NSString *requestUrl = [NSString stringWithFormat:@"%@%@%@", @"http://54.153.15.96/api/documents/", instantDescriptor.identifier, @"/apply_operations"];
+          NSString *requestUrl = [NSString stringWithFormat:@"%@%@%@", @"http://54.153.15.96/api/documents/", self.instantDescriptor.identifier, @"/layers/my_new_layer/apply_operations"];
 
           NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:requestUrl]];
           [request setHTTPMethod:@"POST"];
@@ -290,10 +292,7 @@
                   NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
                   NSLog(@"result %@", json);
 
-                  self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
-                  self.instantClient.delegate = self;
-
-                  [self.instantClient removeLocalStorageForDocumentIdentifier:instantDescriptor.identifier error:&error];
+                  [self.instantClient removeLocalStorageForDocumentIdentifier:self.instantDescriptor.identifier error:&error];
 
                   // 기본 구성에 URLSession 생성
                   NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -328,18 +327,15 @@
                                   //self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
                                   if (token == nil || [token isEqual:[NSNull null]]) {
                                   } else {
-                                      id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
-                                      if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                                      id<PSPDFInstantDocumentDescriptor> Descriptor = [self.instantClient documentDescriptorForJWT:token error:&error];
+                                      if ([Descriptor downloadUsingJWT:token error:&error]) {
                                           NSLog(@"documentDescriptor success");
                                           dispatch_async(dispatch_get_main_queue(), ^{
-                                              NSError *error;
-                                              [NSFileManager.defaultManager createDirectoryAtURL:PSPDFInstantClient.dataDirectory withIntermediateDirectories:YES attributes:@{NSFileProtectionKey: NSFileProtectionComplete} error:&error];
-
-                                              PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
+                                              PSPDFDocument *pdfDocument = Descriptor.editableDocument;
                                               self.pdfController.document = pdfDocument;
                                           });
                                       } else {
-                                          NSLog(@"documentDescriptor token %@",  self.JWT);
+                                          NSLog(@"documentDescriptor token %@",  token);
                                           NSLog(@"error: %@", error);
                                           NSLog(@"documentDescriptor failed");
                                       }
@@ -362,10 +358,17 @@
 
 - (void)closeNote {
   NSLog(@"close note");
-  self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
+    
   NSError *error;
   [self.instantClient removeLocalStorageWithError:&error];
-  //[self.instantClient removeLocalStorageForDocumentIdentifier:instantDescriptor.description error:&error];
+  [self.instantClient removeUnreferencedCacheEntries:&error];
+    
+  if ([self.noteType isEqualToString:@"viewer"]) {
+  } else{
+      [self.socket disconnect];
+      [self.manager disconnect];
+  }
+    
   if (self.onCloseButtonPressed) {
     self.onCloseButtonPressed(@{});
   } else {
@@ -386,10 +389,17 @@
 }
 
 - (void)closeButtonPressed:(nullable id)sender {
-    [self closeNote];
-    if ([self.noteType isEqualToString:@"viewer"]) {
-    } else{
-        [self.socket disconnect];
+    NSLog(@"closeButtonPressed %ld", self.instantDescriptor.documentState);
+    self.collaboViewController.openCollabo = FALSE;
+    if (self.instantDescriptor.documentState == 3 || self.instantDescriptor.documentState == 0 || self.instantDescriptor.documentState == 7) {
+        [self closeNote];
+    } else {
+        // ProgressBar Start
+        [self.loadingView setCenter:self.topController.view.center];
+        [self.topController.view addSubview:self.loadingView];
+        self.loadingView.hidden = FALSE;
+        self.activityIndicator.hidden = FALSE;
+        [self.activityIndicator startAnimating];
     }
 }
 
@@ -399,16 +409,14 @@
     [self.documents addObjectsFromArray:[notiDic objectForKey:@"play"]];
 }
 
-- (void)presentViewController:(UIViewController *)viewControllerToPresent animated:(BOOL)flag completion:(void (^)(void))completion{
-    
-}
-
 - (void)collaboList:(nullable id)sender {
     NSLog(@"collaboList");
-    self.collaboViewController = [CollaboViewController new];
-    self.collaboViewController.modalPresentationStyle = UIModalPresentationCustom;
     
-    [self.topController presentViewController:self.collaboViewController animated:YES completion:nil];
+    if (!self.collaboViewController.openCollabo) {
+        self.collaboViewController.modalPresentationStyle = UIModalPresentationCustom;
+        [self.topController.view addSubview:self.collaboViewController.view];
+        self.collaboViewController.openCollabo = TRUE;
+    }
 }
 
 - (void)addPages:(nullable id)sender {
@@ -479,8 +487,6 @@
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFinishDownloadForDocumentDescriptor: (nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
     NSLog(@"didFinishDownloadForDocumentDescriptor");
-    NSLog(@"didFinishDownloadForDocumentDescriptor token %lu",  documentDescriptor.editableDocument.pageCount);
-    
     dispatch_async(dispatch_get_main_queue(), ^{
         double i = [self.mynumber doubleValue];
         NSLog(@"asd: %f", i);
@@ -490,8 +496,61 @@
 }
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor didFailDownloadWithError:(nonnull NSError *)error{
-    NSLog(@"didFailDownloadWithError");
-    [documentDescriptor reauthenticateWithJWT:self.JWT];
+    NSLog(@"didFailDownloadWithError1111");
+    [self.instantClient removeLocalStorageWithError:&error];
+    [self.instantClient removeUnreferencedCacheEntries:&error];
+    
+    // 기본 구성에 URLSession 생성
+    NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
+    // request URL 설정
+    NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
+    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
+
+    NSLog(@"noteId %@", self.noteId);
+    // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
+    NSString *postParams = [NSString stringWithFormat:@"note_id=%@", self.noteId];
+    NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
+
+    // 셋
+    [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
+    [urlRequest setHTTPMethod:@"POST"];
+    [urlRequest setHTTPBody:documentData];
+
+    // dataTask 생성
+    NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (data!=nil)
+        {
+            NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
+            NSString *token = [json objectForKey:@"token"];
+
+            NSLog(@"data token %@", token);
+            if([[json objectForKey:@"result"] isEqualToString:@"success"]){
+                NSLog(@"success");
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    NSError *error;
+                    if (token == nil || [token isEqual:[NSNull null]]) {
+                    } else {
+                        id<PSPDFInstantDocumentDescriptor> Descriptor = [self.instantClient documentDescriptorForJWT:token error:&error];
+                        if ([Descriptor downloadUsingJWT:token error:&error]) {
+                            NSLog(@"documentDescriptor success");
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                PSPDFDocument *pdfDocument = Descriptor.editableDocument;
+                                self.pdfController.document = pdfDocument;
+                            });
+                        } else {
+                            NSLog(@"documentDescriptor token %@",  token);
+                            NSLog(@"error: %@", error);
+                            NSLog(@"documentDescriptor failed");
+                        }
+                    }
+                });
+            }
+        } else {
+            NSLog(@"error");
+        }
+    }];
+    [dataTask resume];
 }
 
 - (void)instantClient:(PSPDFInstantClient *)instantClient didBeginSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
@@ -504,6 +563,15 @@
 
 - (void)instantClient:(PSPDFInstantClient *)instantClient didFinishSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
     NSLog(@"didFinishSyncForDocumentDescriptor %ld", documentDescriptor.documentState);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.activityIndicator.hidden == FALSE) {
+            NSLog(@"fasle!!!!!!!!!!!!");
+            [self.activityIndicator stopAnimating];
+            self.activityIndicator.hidden = TRUE;
+            self.loadingView.hidden = TRUE;
+            [self closeNote];
+        }
+    });
 }
 
 #pragma mark - PSPDFDocumentDelegate
@@ -883,16 +951,17 @@
     self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
 }
 
-// 어플리케이션이 종료될때
-- (void)applicationWillTerminate:(UIApplication *)application
-{
+- (void)setDismiss:(NSNotification *)noti{
+    NSLog(@"Signature form elements are not supported.");
+    
     // Called when the application is about to terminate.
     // Save data if appropriate. See also applicationDidEnterBackground:.
     // (애플리케이션이 막 종료되려고 할 때 호출된다. 필요하다면 데이터를 저장한다. applicationDidEnterBackground: 메서드와 함께 참고한다)
     NSError *error;
-    self.instantClient = [[RCTPSPDFKitViewManager theSettingsData] instantClient];
     [self.instantClient removeLocalStorageWithError:&error];
-    
+    [self.instantClient removeUnreferencedCacheEntries:&error];
     [self.socket disconnect];
+    [self.manager disconnect];
 }
+
 @end

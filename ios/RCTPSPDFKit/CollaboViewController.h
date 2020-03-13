@@ -14,5 +14,8 @@
 @interface CollaboViewController : UIViewController
 
 @property (nonatomic, nullable) PSPDFViewController *pdfController;
+@property (nonatomic, nullable) UIViewController *topController;
+@property (nonatomic) BOOL openCollabo;
+@property (nonatomic, nullable) NSString *noteId;
 
 @end

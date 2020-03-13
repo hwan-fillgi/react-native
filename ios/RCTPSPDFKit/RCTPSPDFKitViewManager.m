@@ -69,7 +69,6 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       view.socket = view.manager.defaultSocket;
       
       [view.socket connect];
-      
       self.socket = view.socket;
       
       self.viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
@@ -92,7 +91,7 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       self.loadingLabel.text = @"Loading...";
       [self.loadingView addSubview:self.loadingLabel];
         
-      // ProgressBar Start
+//      // ProgressBar Start
 //      [self.loadingView setCenter:self.viewController.view.center];
 //      [self.viewController.view addSubview:self.loadingView];
 //      self.loadingView.hidden = FALSE;
@@ -143,25 +142,22 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                     dispatch_async(dispatch_get_main_queue(), ^{
                         NSError *error;
 
-                        self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];
-                        self.instantClient.delegate = self;
-
-                        self.JWT = token;
-                        id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
-                        if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                        view.JWT = token;
+                        view.instantDescriptor = [view.instantClient documentDescriptorForJWT:self.JWT error:&error];
+                        if ([view.instantDescriptor downloadUsingJWT:view.JWT error:&error]) {
                             NSLog(@"documentDescriptor success");
                             dispatch_async(dispatch_get_main_queue(), ^{
-                                PSPDFDocument *pdfDocument = documentDescriptor.readOnlyDocument;
+                                PSPDFDocument *pdfDocument = view.instantDescriptor.readOnlyDocument;
                                 view.pdfController.document = pdfDocument;
 
                                 NSLog(@"documentDescriptor token %f %f",  view.pdfController.view.frame.size.width / 2, view.pdfController.view.frame.size.width);
                             });
                         } else {
-                            NSLog(@"documentDescriptor token %@",  self.JWT);
+                            NSLog(@"documentDescriptor token %@",  view.JWT);
                             NSLog(@"error: %@", error);
                             NSLog(@"documentDescriptor failed");
                             NSError *error;
-                            [self.instantClient removeLocalStorageWithError:&error];
+                            [view.instantClient removeLocalStorageWithError:&error];
                         }
                     });
                 }
@@ -303,25 +299,22 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
                         } else {
                             NSError *error;
 
-                            self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];
-                            self.instantClient.delegate = self;
-
-                            self.JWT = token;
+                            view.JWT = token;
                             if (token == nil || [token isEqual:[NSNull null]]) {
                             } else {
-                                id<PSPDFInstantDocumentDescriptor> documentDescriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
-                                if ([documentDescriptor downloadUsingJWT:self.JWT error:&error]) {
+                                view.instantDescriptor = [view.instantClient documentDescriptorForJWT:view.JWT error:&error];
+                                if ([view.instantDescriptor downloadUsingJWT:view.JWT error:&error]) {
                                     NSLog(@"documentDescriptor success");
-                                    self.instantDescriptor = documentDescriptor;
-                                    PSPDFDocument *pdfDocument = documentDescriptor.editableDocument;
+                                    self.instantDescriptor = view.instantDescriptor;
+                                    PSPDFDocument *pdfDocument = view.instantDescriptor.editableDocument;
                                     view.pdfController.document = pdfDocument;
                                     [view.socket emit:@"joinRoom" with:@[@{@"roomName": noteId}]];
                                 } else {
-                                    NSLog(@"documentDescriptor token %@",  self.JWT);
+                                    NSLog(@"documentDescriptor token %@",  view.JWT);
                                     NSLog(@"error: %@", error);
                                     NSLog(@"documentDescriptor failed");
                                     NSError *error;
-                                    [self.instantClient removeLocalStorageWithError:&error];
+                                    [view.instantClient removeLocalStorageWithError:&error];
                                 }
                             }
                         }
@@ -355,7 +348,6 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFinishDownloadForDocumentDescriptor: (nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
     NSLog(@"didFinishDownloadForDocumentDescriptor");
-    NSLog(@"didFinishDownloadForDocumentDescriptor token %lu",  documentDescriptor.editableDocument.pageCount);
 }
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor didFailDownloadWithError:(nonnull NSError *)error{
