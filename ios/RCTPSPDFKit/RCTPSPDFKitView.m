@@ -36,7 +36,7 @@
 @property (nonatomic, nullable) UIColor *mainColor;
 @property (nonatomic, nullable) UIColor *secondaryColor;
 @property (nonatomic, nullable) UIPanGestureRecognizer *recognizer;
-@property (nonatomic, nullable) BOOL *browser;
+@property (nonatomic) BOOL browser;
 @property (nonatomic) PSPDFDocumentViewLayout *layout;
 @property (nonatomic, nullable) PSPDFDocumentEditor *editor;
 @property (nonatomic, retain) UIActivityIndicatorView *activityIndicator;
@@ -44,7 +44,6 @@
 @property (nonatomic, retain) UIView *loadingView;
 @property (nonatomic, retain) UIActivityIndicatorView *pageIndicator;
 @property (nonatomic, nullable) OverlayViewController *overlayViewController;
-@property (nonatomic, nullable) NSString *insets;
 @property (nonatomic, nullable) CollaboViewController *collaboViewController;
 
 @end
@@ -81,7 +80,7 @@
     self.collaboViewController = [CollaboViewController new];
     self.collaboViewController.openCollabo = FALSE;
     
-    _browser = YES;
+    _browser = TRUE;
     _mainColor = [UIColor blackColor];
     _secondaryColor = [UIColor whiteColor];
     _result = [[NSString alloc] init];
@@ -200,6 +199,9 @@
   [self.topController didMoveToParentViewController:self.controller];
   self.collaboViewController.topController = self.topController;
   self.collaboViewController.noteId = self.noteId;
+  self.collaboViewController.username = self.username;
+  self.collaboViewController.profileImage = self.profileImage;
+  self.collaboViewController.userId = self.userId;
 
   [NSLayoutConstraint activateConstraints:
    @[[topControllerView.topAnchor constraintEqualToAnchor:self.topAnchor],
@@ -227,8 +229,6 @@
           self.overlayViewController.pdfController = self.pdfController;
           self.overlayViewController.overlayWidth = self.mynumber;
           self.pdfController.overlayViewController = self.overlayViewController;
-          
-          self.JWT = [[RCTPSPDFKitViewManager theSettingsData] JWT]; // 값 읽기
 
           NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
           NSData *docData = [NSData dataWithContentsOfURL:docURL];
@@ -403,7 +403,7 @@
     }
 }
 
-- (void)setPlay:(NSNotification *)noti{
+- (void)setPlay:(NSNotification *)noti {
     _documents = [NSMutableArray new];
     NSDictionary *notiDic=[noti userInfo];
     [self.documents addObjectsFromArray:[notiDic objectForKey:@"play"]];
@@ -411,7 +411,6 @@
 
 - (void)collaboList:(nullable id)sender {
     NSLog(@"collaboList");
-    
     if (!self.collaboViewController.openCollabo) {
         self.collaboViewController.modalPresentationStyle = UIModalPresentationCustom;
         [self.topController.view addSubview:self.collaboViewController.view];
@@ -434,8 +433,6 @@
 }
 
 - (void)switchBrowser:(nullable id)sender {
-    NSLog(@"bValue1 : %@", (self.browser ? @"YES" : @"NO"));
-    
     if (self.browser) {
         int f1 = 1;
         NSNumber* num1 = [NSNumber numberWithDouble:f1];
@@ -499,7 +496,7 @@
     NSLog(@"didFailDownloadWithError1111");
     [self.instantClient removeLocalStorageWithError:&error];
     [self.instantClient removeUnreferencedCacheEntries:&error];
-    
+
     // 기본 구성에 URLSession 생성
     NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
     NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
@@ -537,6 +534,7 @@
                             dispatch_async(dispatch_get_main_queue(), ^{
                                 PSPDFDocument *pdfDocument = Descriptor.editableDocument;
                                 self.pdfController.document = pdfDocument;
+                                [self.socket emit:@"joinRoom" with:@[@{@"roomName": self.noteId}]];
                             });
                         } else {
                             NSLog(@"documentDescriptor token %@",  token);

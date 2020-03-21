@@ -15,8 +15,10 @@
 #import "CollaboViewController.h"
 #import "Masonry.h"
 #import "UIImageView+WebCache.h"
+#import "OverlayViewController.h"
+#import "InviteViewController.h"
 
-@interface CollaboViewController () <UITableViewDelegate,UITableViewDataSource>
+@interface CollaboViewController () <UITableViewDelegate, UITableViewDataSource>
 
 @property (nonatomic) UILabel *label;
 @property (nonatomic) UITextField *textField;
@@ -27,13 +29,12 @@
 @property (nonatomic, nullable) UILabel *userTextView;
 @property (nonatomic, nullable) UIView *listUiView;
 @property (nonatomic, nullable) UIView *stackView;
-@property (nonatomic, nullable) UIImage *closeImage;
 @property (strong, nonatomic) UITapGestureRecognizer *tapOutsideRecognizer;
 
 @property (strong,nonatomic) UITableView *table;
-@property (strong,nonatomic) NSArray *content;
 @property (strong,nonatomic) NSArray *userArray;
 @property (strong,nonatomic) NSArray *tableData;
+@property (strong,nonatomic) NSMutableArray *userInfo;
 
 @end
 
@@ -44,13 +45,12 @@
 -(void)viewDidLoad {
     [super viewDidLoad];
     
-    UIView *superView = [[UIView alloc] init];
-    NSLog(@"noteId %@", self.noteId);
     [self loadMember];
-    self.content = @[ @"Monday", @"Tuesday", @"Wednesday",@"Thursday",@"Friday",@"Saturday",@"Sunday"];
     // size initial
     self.width = self.topController.view.frame.size.width * 0.29;
     self.height = self.topController.view.frame.size.height * 0.8;
+    
+    UIColor *defaultColor = [self colorWithHexString:@"#00d82b" alpha:1];
     
     //전체 view
     UIView *framUiView = [[UIView alloc] init];
@@ -66,7 +66,6 @@
     //bar
     UIImageView *barImage = [[UIImageView alloc] init];
     [barImage setImage:[PSPDFKitGlobal imageNamed:@"Rectangle"]];
-    barImage.backgroundColor = [UIColor redColor];
     [framUiView addSubview:barImage];
     
     [barImage mas_makeConstraints:^(MASConstraintMaker *make) {
@@ -85,7 +84,7 @@
     }];
     
     UILabel *collaboTextView = [[UILabel alloc] init];
-    collaboTextView.textColor = [UIColor redColor];
+    collaboTextView.textColor = defaultColor;
     [collaboTextView setText:@"Collaboration"];
     [topUiView addSubview:collaboTextView];
     [collaboTextView mas_makeConstraints:^(MASConstraintMaker *make) {
@@ -103,7 +102,7 @@
     }];
     
     self.userTextView = [[UILabel alloc] init];
-    self.userTextView.textColor = [UIColor redColor];
+    self.userTextView.textColor = defaultColor;
     NSString *number = [@(self.userArray.count) stringValue];
     [self.userTextView setText:number];
     [topUiView addSubview:self.userTextView];
@@ -140,30 +139,31 @@
         make.centerY.equalTo(topUiView);
     }];
     
-    //invite
-    UIView *inviteUiView = [[UIView alloc] init];
-    [framUiView addSubview:inviteUiView];
-    [inviteUiView mas_makeConstraints:^(MASConstraintMaker *make) {
+    //middle
+    UIView *middleUiView = [[UIView alloc] init];
+    [framUiView addSubview:middleUiView];
+    [middleUiView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.top.equalTo(topUiView.mas_bottom).with.offset(self.height * 0.038);
-        make.left.equalTo(framUiView.mas_left).with.offset(self.width * 0.011);
+        make.width.equalTo(@(self.width * 0.88));
         make.height.equalTo(@(self.width * 0.15));
     }];
     
     UIImageView *inviteImage = [[UIImageView alloc] init];
     [inviteImage setImage:[PSPDFKitGlobal imageNamed:@"invite-collabo"]];
-    [inviteUiView addSubview:inviteImage];
+    [middleUiView addSubview:inviteImage];
     [inviteImage mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.left.equalTo(middleUiView.mas_left).with.offset(self.width * 0.011);
         make.width.equalTo(@(self.width * 0.15));
         make.height.equalTo(@(self.width * 0.15));
     }];
-    
+
     UILabel *inviteTextView = [[UILabel alloc] init];
-    inviteTextView.textColor = [UIColor redColor];
+    inviteTextView.textColor = defaultColor;
     [inviteTextView setText:@"invite"];
-    [inviteUiView addSubview:inviteTextView];
+    [middleUiView addSubview:inviteTextView];
     [inviteTextView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.left.equalTo(inviteImage.mas_right).with.offset(self.width * 0.065);
-        make.centerY.equalTo(inviteUiView);
+        make.centerY.equalTo(middleUiView);
     }];
     
     //list
@@ -171,7 +171,7 @@
     self.listUiView.backgroundColor = [UIColor whiteColor];
     [framUiView addSubview:self.listUiView];
     [self.listUiView mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.top.equalTo(inviteUiView.mas_bottom).with.offset(self.height * 0.038);
+        make.top.equalTo(middleUiView.mas_bottom).with.offset(self.height * 0.038);
         make.left.equalTo(framUiView.mas_left).with.offset(self.width * 0.011);
         make.height.equalTo(@(self.height * 0.7));
         make.width.equalTo(@(self.width * 0.88));
@@ -181,17 +181,22 @@
     self.table = [[UITableView alloc] initWithFrame:tableFrame style:UITableViewStylePlain];
     self.table.rowHeight = self.height * 0.1;
     self.table.separatorStyle = UITableViewCellSeparatorStyleNone;
-//    self.table.showsVerticalScrollIndicator = NO;
-//    self.table.showsHorizontalScrollIndicator = NO;
     self.table.backgroundColor = [UIColor blackColor];
     self.table.delegate = self;
     self.table.dataSource = self;
     [self.listUiView addSubview:self.table];
     
-    UITapGestureRecognizer *closeTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(closeView)];
+    // close 버튼 눌렀을때 이벤트
+    UITapGestureRecognizer *closeTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(closeButton)];
     closeTap.numberOfTapsRequired = 1;
     [closeImage setUserInteractionEnabled:YES];
     [closeImage addGestureRecognizer:closeTap];
+    
+    // invite 버튼 눌렀을때 이벤트
+    UITapGestureRecognizer *inviteTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(inviteView)];
+    inviteTap.numberOfTapsRequired = 1;
+    [inviteImage setUserInteractionEnabled:YES];
+    [inviteImage addGestureRecognizer:inviteTap];
     
     UIPanGestureRecognizer *moveView = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleView:)];
     
@@ -202,12 +207,7 @@
     
     [self.view addGestureRecognizer:moveView];
     
-    NSLog(@"noteId %f", self.topController.view.frame.size.width);
-    [self.view mas_makeConstraints:^(MASConstraintMaker *make) {
-        make.centerX.equalTo(self.topController.view);
-        make.width.equalTo(@(self.width));
-        make.height.equalTo(@(self.height));
-    }];
+    self.view.frame = CGRectMake(self.topController.view.frame.size.width * 0.64, self.topController.view.frame.size.height * 0.09, self.width, self.height);
 }
 
 - (void)loadMember {
@@ -236,19 +236,23 @@
             NSLog(@"json data %@", json);
             if([[json objectForKey:@"result"] isEqualToString:@"success"]){
                 NSLog(@"success");
-                NSLog(@"json data %@", [json objectForKey:@"data"]);
-                
                 // Convert to JSON object:
                 self.userArray = [NSJSONSerialization JSONObjectWithData:[[json objectForKey:@"data"] dataUsingEncoding:NSUTF8StringEncoding]
                                                                       options:0 error:NULL];
-                NSLog(@"jsonObject=%@", self.userArray);
-
-                // Extract "username" values:
-                self.tableData = [self.userArray valueForKey:@"username"];
-                NSLog(@"tableData=%@", self.tableData);
+                
+                NSString *name = [NSString stringWithFormat:@"%@%@", self.username, @" (Me)"];
+                NSDictionary *dict=@{@"profile_img" : self.profileImage ,@"username" : name};
+                
+                self.userInfo = [[NSMutableArray alloc] init];
+                [self.userInfo addObject:dict];
+                for(int i=0; i< self.userArray.count; i++){
+                    [self.userInfo addObject:[self.userArray objectAtIndex:i]];
+                }
+                
+                self.tableData = [self.userInfo valueForKey:@"username"];
                 dispatch_async(dispatch_get_main_queue(), ^{
                     [self.table reloadData];
-                    NSString *number = [@(self.userArray.count) stringValue];
+                    NSString *number = [@(self.userInfo.count) stringValue];
                     [self.userTextView setText:number];
                     [self.userTextView setNeedsDisplay];
                 });
@@ -260,12 +264,39 @@
     }];
     [dataTask resume];
 }
+
+// hex -> rgb color convert
+- (UIColor *)colorWithHexString:(NSString *)str_HEX  alpha:(CGFloat)alpha_range{
+    NSString *noHashString = [str_HEX stringByReplacingOccurrencesOfString:@"#" withString:@""]; // remove the #
+
+    int red = 0;
+    int green = 0;
+    int blue = 0;
+
+    if ([str_HEX length]<=3)
+    {
+        sscanf([noHashString UTF8String], "%01X%01X%01X", &red, &green, &blue);
+        return  [UIColor colorWithRed:red/16.0 green:green/16.0 blue:blue/16.0 alpha:alpha_range];
+    }
+    else if ([str_HEX length]>7)
+    {
+        NSString *mySmallerString = [noHashString substringToIndex:6];
+        sscanf([mySmallerString UTF8String], "%02X%02X%02X", &red, &green, &blue);
+        return  [UIColor colorWithRed:red/255.0 green:green/255.0 blue:blue/255.0 alpha:alpha_range];
+    }
+    else
+    {
+        sscanf([noHashString UTF8String], "%02X%02X%02X", &red, &green, &blue);
+        return  [UIColor colorWithRed:red/255.0 green:green/255.0 blue:blue/255.0 alpha:alpha_range];
+    }
+}
+
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     return 1;
 }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
-    return self.userArray.count;
+    return self.userInfo.count;
 }
  
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -278,8 +309,8 @@
         cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:cellIdentifier];
         
     }
-    //UIImage *image = [PSPDFKitGlobal imageNamed:@"invite-collabo"];
-    NSString *imageString = [[self.userArray objectAtIndex:indexPath.row] valueForKey:@"profile_img"];
+    
+    NSString *imageString = [[self.userInfo objectAtIndex:indexPath.row] valueForKey:@"profile_img"];
     NSLog(@"imageString=%@", imageString);
     if (imageString == nil || [imageString isEqual:[NSNull null]]) {
         [cell.imageView setImage:[PSPDFKitGlobal imageNamed:@"default_profile"]];
@@ -294,7 +325,6 @@
         cell.imageView.layer.borderWidth = 2.0;
         cell.imageView.layer.masksToBounds = YES;
         cell.imageView.layer.borderColor = [[UIColor redColor] CGColor];
-        //[cell.imageView sd_setImageWithURL:imageUrl];
     }
     [cell.imageView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.leading.equalTo(cell.mas_leading);
@@ -303,7 +333,7 @@
     }];
     
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
-    cell.textLabel.text =  [[self.userArray objectAtIndex:indexPath.row] valueForKey:@"username"];
+    cell.textLabel.text =  [[self.userInfo objectAtIndex:indexPath.row] valueForKey:@"username"];
     cell.textLabel.textColor = [UIColor whiteColor];
     [cell.textLabel mas_makeConstraints:^(MASConstraintMaker *make) {
         make.left.equalTo(cell.imageView.mas_right).with.offset(self.width * 0.065);
@@ -315,7 +345,7 @@
  
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath;
 {
-    NSLog(@"title of cell %@", [[self.userArray objectAtIndex:indexPath.row] valueForKey:@"username"]);
+    NSLog(@"title of cell %@", [[self.userInfo objectAtIndex:indexPath.row] valueForKey:@"username"]);
 }
 
 #pragma mark - Gesture Recognizer
@@ -332,10 +362,23 @@
     [recognizer setTranslation:CGPointZero inView:self.view];
 }
 
-- (void)closeView{
+- (void)closeButton{
     NSLog(@"single Tap on imageview");
     [self.view removeFromSuperview];
     self.openCollabo = FALSE;
+}
+
+- (void)inviteView{
+    NSLog(@"single Tap on inviteView");
+   
+    //InviteViewController* inviteViewController = [[InviteViewController alloc] init];
+    InviteViewController* inviteViewController = [InviteViewController new];
+    inviteViewController.topController = self.topController;
+    inviteViewController.noteId = self.noteId;
+    inviteViewController.userId = self.userId;
+    inviteViewController.modalPresentationStyle = UIModalPresentationCustom;
+    [self addChildViewController:inviteViewController];
+    [self.view addSubview:inviteViewController.view];
 }
 
 @end
