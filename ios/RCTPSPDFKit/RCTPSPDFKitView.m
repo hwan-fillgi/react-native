@@ -54,7 +54,7 @@
 - (instancetype)initWithFrame:(CGRect)frame {
   if ((self = [super initWithFrame:frame])) {
     NSError *error;
-    self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.153.15.96/"] error:&error];
+    self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://18.144.22.88/"] error:&error];
     self.instantClient.delegate = self;
       
     UIViewController *viewController = [[[[UIApplication sharedApplication] delegate] window] rootViewController];
@@ -94,8 +94,6 @@
       
     _pdfController = [[PSPDFInstantViewController alloc] initWithDocument:self.pdfController.document configuration:[PSPDFConfiguration configurationWithBuilder:^(PSPDFConfigurationBuilder *builder) {
         [builder overrideClass:PSPDFUserInterfaceView.class withClass:self.customView.class];
-        UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, viewController.view.frame.size.width / 2, 0.0, 0.0);
-        builder.additionalScrollViewFrameInsets = contentInsets;
     }]];
       
     _pdfController.delegate = self;
@@ -183,10 +181,6 @@
   if (self.controller == nil || self.window == nil || self.topController != nil) {
     return;
   }
-    
-  UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, self.pdfController.view.frame.size.width / 2, 0.0, 0.0);
-  self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
-    //NSLog(@"self.pdfController.documentViewController.view.frame.size.width %f", self.pdfController.view.frame.size.width);
 
   self.topController = self.pdfController;
   self.topController = [[PSPDFNavigationController alloc] initWithRootViewController:self.pdfController];
@@ -229,6 +223,7 @@
           self.overlayViewController.pdfController = self.pdfController;
           self.overlayViewController.overlayWidth = self.mynumber;
           self.pdfController.overlayViewController = self.overlayViewController;
+          
 
           NSURL *docURL = [NSBundle.mainBundle URLForResource:@"note" withExtension:@"pdf"];
           NSData *docData = [NSData dataWithContentsOfURL:docURL];
@@ -238,7 +233,8 @@
           NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
 
           NSMutableDictionary *json = [NSMutableDictionary dictionaryWithCapacity:1];
-          NSNumber *someNumber = [NSNumber numberWithInt:0];
+          
+          NSNumber *someNumber = [NSNumber numberWithLong:self.pdfController.document.pageCount - 1];
           [json setObject:@"importDocument" forKey:@"type"];
           [json setObject:@"5ce11b7c-0726-48a2-a493-1cf4f92f26c5" forKey:@"document"];
           [json setObject:someNumber forKey:@"afterPageIndex"];
@@ -249,7 +245,7 @@
 
           NSData *jsonData = [NSJSONSerialization dataWithJSONObject:postJson options:NSJSONWritingPrettyPrinted error:&error];
 
-          NSString *requestUrl = [NSString stringWithFormat:@"%@%@%@", @"http://54.153.15.96/api/documents/", self.instantDescriptor.identifier, @"/layers/my_new_layer/apply_operations"];
+          NSString *requestUrl = [NSString stringWithFormat:@"%@%@%@", @"http://18.144.22.88/api/documents/", self.instantDescriptor.identifier, @"/apply_operations"];
 
           NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:[NSURL URLWithString:requestUrl]];
           [request setHTTPMethod:@"POST"];
@@ -286,67 +282,21 @@
           NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
               if (data!=nil)
               {
-                  NSString* str = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-
-                  NSLog(@"result %@", str);
-                  NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-                  NSLog(@"result %@", json);
-
+                  // 페이지 추가시 연결을 끊었다가 재연결시켜준다.
                   [self.instantClient removeLocalStorageForDocumentIdentifier:self.instantDescriptor.identifier error:&error];
-
-                  // 기본 구성에 URLSession 생성
-                  NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-                  NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
-                  // request URL 설정
-                  NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
-                  NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
-
-                  NSLog(@"noteId %@", self.noteId);
-                  // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
-                  NSString *postParams = [NSString stringWithFormat:@"note_id=%@", self.noteId];
-                  NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
-
-                  // 셋
-                  [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
-                  [urlRequest setHTTPMethod:@"POST"];
-                  [urlRequest setHTTPBody:documentData];
-
-                  // dataTask 생성
-                  NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-                      if (data!=nil)
-                      {
-                          NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-                          NSString *token = [json objectForKey:@"token"];
-
-                          NSLog(@"data token %@", token);
-                          if([[json objectForKey:@"result"] isEqualToString:@"success"]){
-                              NSLog(@"success");
-                              dispatch_async(dispatch_get_main_queue(), ^{
-                                  NSError *error;
-
-                                  //self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://54.193.26.90/"] error:&error];
-                                  if (token == nil || [token isEqual:[NSNull null]]) {
-                                  } else {
-                                      id<PSPDFInstantDocumentDescriptor> Descriptor = [self.instantClient documentDescriptorForJWT:token error:&error];
-                                      if ([Descriptor downloadUsingJWT:token error:&error]) {
-                                          NSLog(@"documentDescriptor success");
-                                          dispatch_async(dispatch_get_main_queue(), ^{
-                                              PSPDFDocument *pdfDocument = Descriptor.editableDocument;
-                                              self.pdfController.document = pdfDocument;
-                                          });
-                                      } else {
-                                          NSLog(@"documentDescriptor token %@",  token);
-                                          NSLog(@"error: %@", error);
-                                          NSLog(@"documentDescriptor failed");
-                                      }
-                                  }
-                              });
-                          }
-                      } else {
-                          NSLog(@"error");
-                      }
-                  }];
-                  [dataTask resume];
+                  
+                  id<PSPDFInstantDocumentDescriptor> Descriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
+                  if ([Descriptor downloadUsingJWT:self.JWT error:&error]) {
+                      NSLog(@"documentDescriptor success");
+                      dispatch_async(dispatch_get_main_queue(), ^{
+                          PSPDFDocument *pdfDocument = Descriptor.editableDocument;
+                          self.pdfController.document = pdfDocument;
+                      });
+                  } else {
+                      NSLog(@"documentDescriptor token %@",  self.JWT);
+                      NSLog(@"error: %@", error);
+                      NSLog(@"documentDescriptor failed");
+                  }
               } else {
                   NSLog(@"error");
               }
@@ -357,7 +307,7 @@
 }
 
 - (void)closeNote {
-  NSLog(@"close note");
+  NSLog(@"close note %@", self.instantDescriptor.identifier);
     
   NSError *error;
   [self.instantClient removeLocalStorageWithError:&error];
@@ -475,7 +425,7 @@
 #pragma mark - PSPDFInstantClientDelegate
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient didFailAuthenticationForDocumentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
-    NSLog(@"didFinishReauthenticationWithJWT");
+    NSLog(@"didFailAuthenticationForDocumentDescriptor");
 }
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>) documentDescriptor didFinishReauthenticationWithJWT:(nonnull NSString *)validJWT{
@@ -489,66 +439,30 @@
         NSLog(@"asd: %f", i);
         UIEdgeInsets contentInsets = UIEdgeInsetsMake(0.0, i, 0.0, 0.0);
         self.pdfController.documentViewController.layout.additionalScrollViewFrameInsets = contentInsets;
+        
+        [self.socket emit:@"joinRoom" with:@[@{@"roomName": self.noteId}]];
     });
 }
 
 - (void)instantClient:(nonnull PSPDFInstantClient *)instantClient documentDescriptor:(nonnull id<PSPDFInstantDocumentDescriptor>)documentDescriptor didFailDownloadWithError:(nonnull NSError *)error{
-    NSLog(@"didFailDownloadWithError1111");
+    NSLog(@"didFailDownloadWithError1111 %@", documentDescriptor.identifier);
     [self.instantClient removeLocalStorageWithError:&error];
     [self.instantClient removeUnreferencedCacheEntries:&error];
 
-    // 기본 구성에 URLSession 생성
-    NSURLSessionConfiguration *defaultSessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
-    NSURLSession *defaultSession = [NSURLSession sessionWithConfiguration:defaultSessionConfiguration];
-    // request URL 설정
-    NSURL *document_url = [NSURL URLWithString:@"https://1g3h2oj5z6.execute-api.us-west-1.amazonaws.com/prod/users/document_id"];
-    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:document_url];
-
-    NSLog(@"noteId %@", self.noteId);
-    // UTF8 인코딩을 사용하여 POST 문자열 매개 변수를 데이터로 변환
-    NSString *postParams = [NSString stringWithFormat:@"note_id=%@", self.noteId];
-    NSData *documentData = [postParams dataUsingEncoding:NSUTF8StringEncoding];
-
-    // 셋
-    [urlRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
-    [urlRequest setHTTPMethod:@"POST"];
-    [urlRequest setHTTPBody:documentData];
-
-    // dataTask 생성
-    NSURLSessionDataTask *dataTask = [defaultSession dataTaskWithRequest:urlRequest completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        if (data!=nil)
-        {
-            NSDictionary* json = [NSJSONSerialization JSONObjectWithData:data options:kNilOptions error:&error];
-            NSString *token = [json objectForKey:@"token"];
-
-            NSLog(@"data token %@", token);
-            if([[json objectForKey:@"result"] isEqualToString:@"success"]){
-                NSLog(@"success");
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    NSError *error;
-                    if (token == nil || [token isEqual:[NSNull null]]) {
-                    } else {
-                        id<PSPDFInstantDocumentDescriptor> Descriptor = [self.instantClient documentDescriptorForJWT:token error:&error];
-                        if ([Descriptor downloadUsingJWT:token error:&error]) {
-                            NSLog(@"documentDescriptor success");
-                            dispatch_async(dispatch_get_main_queue(), ^{
-                                PSPDFDocument *pdfDocument = Descriptor.editableDocument;
-                                self.pdfController.document = pdfDocument;
-                                [self.socket emit:@"joinRoom" with:@[@{@"roomName": self.noteId}]];
-                            });
-                        } else {
-                            NSLog(@"documentDescriptor token %@",  token);
-                            NSLog(@"error: %@", error);
-                            NSLog(@"documentDescriptor failed");
-                        }
-                    }
-                });
-            }
-        } else {
-            NSLog(@"error");
-        }
-    }];
-    [dataTask resume];
+    self.instantClient = [[PSPDFInstantClient alloc] initWithServerURL:[NSURL URLWithString:@"http://18.144.22.88/"] error:&error];
+    id<PSPDFInstantDocumentDescriptor> Descriptor = [self.instantClient documentDescriptorForJWT:self.JWT error:&error];
+    if ([Descriptor downloadUsingJWT:self.JWT error:&error]) {
+        NSLog(@"documentDescriptor success");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            PSPDFDocument *pdfDocument = Descriptor.editableDocument;
+            self.pdfController.document = pdfDocument;
+            [self.socket emit:@"joinRoom" with:@[@{@"roomName": self.noteId}]];
+        });
+    } else {
+        NSLog(@"documentDescriptor token %@",  self.JWT);
+        NSLog(@"error: %@", error);
+        NSLog(@"documentDescriptor failed");
+    }
 }
 
 - (void)instantClient:(PSPDFInstantClient *)instantClient didBeginSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
@@ -559,11 +473,18 @@
     NSLog(@"didChangeSyncStateForDocumentDescriptor %ld", documentDescriptor.documentState);
 }
 
+- (void)instantClient:(PSPDFInstantClient *)instantClient documentDescriptor:(id <PSPDFInstantDocumentDescriptor>)documentDescriptor didFailReauthenticationWithError:(NSError *)error{
+    NSLog(@"didFailReauthenticationWithError %ld", documentDescriptor.documentState);
+}
+
+- (void)instantClient:(PSPDFInstantClient *)instantClient documentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor didFailSyncWithError:(NSError *)error{
+    NSLog(@"didFailSyncWithError %ld", documentDescriptor.documentState);
+}
+
 - (void)instantClient:(PSPDFInstantClient *)instantClient didFinishSyncForDocumentDescriptor:(id<PSPDFInstantDocumentDescriptor>)documentDescriptor{
     NSLog(@"didFinishSyncForDocumentDescriptor %ld", documentDescriptor.documentState);
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self.activityIndicator.hidden == FALSE) {
-            NSLog(@"fasle!!!!!!!!!!!!");
             [self.activityIndicator stopAnimating];
             self.activityIndicator.hidden = TRUE;
             self.loadingView.hidden = TRUE;
@@ -940,6 +861,8 @@
     self.mynumber = [notiDic objectForKey:@"playTime"];
     double i = [self.mynumber doubleValue];
     
+    NSLog(@"setPlayTime: %f", i);
+    
     self.overlayViewController = [OverlayViewController new];
     self.overlayViewController.pdfController = self.pdfController;
     self.overlayViewController.overlayWidth = self.mynumber;
@@ -958,6 +881,7 @@
     NSError *error;
     [self.instantClient removeLocalStorageWithError:&error];
     [self.instantClient removeUnreferencedCacheEntries:&error];
+    [self.instantClient removeLocalStorageForDocumentIdentifier:self.instantDescriptor.identifier error:&error];
     [self.socket disconnect];
     [self.manager disconnect];
 }

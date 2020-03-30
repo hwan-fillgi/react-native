@@ -30,7 +30,7 @@
   if ((self = [super initWithFrame:frame])) {
     self.noteId = [[RCTPSPDFKitViewManager theSettingsData] version]; // 값 읽기
     self.socket = [[RCTPSPDFKitViewManager theSettingsData] socket];
-    NSLog(@"mVersion %@", self.noteId);
+    NSLog(@"mVersion %@", self.socket);
     
     AWSCognitoCredentialsProvider *credentialsProvider = [[AWSCognitoCredentialsProvider alloc]
        initWithRegionType:AWSRegionUSWest2
@@ -172,6 +172,10 @@
           self.closeFlag = NO;
       }
   }];
+    
+    [self.socket on:@"recPicker" callback:^(NSArray* data, SocketAckEmitter* ack) {
+        NSLog(@"recPicker %@", data);
+    }];
   return self;
 }
 
@@ -297,109 +301,110 @@
 // 파일선택 하는 부분
 #pragma mark - iCloud files
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
-    //self.sendFlag = NO;
-    NSURL *fileURL = url;
-    NSString *filename = url.lastPathComponent;
-    NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", self.noteId, @"/", filename];
-
-    AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
-    expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            // Do something e.g. Update a progress bar.
-            NSLog(@"progressz");
-        });
-    };
-
-    AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                NSLog(@"File upload completed");
-                self.saveFile = [NSMutableArray new];
-                NSLog(@"document save %@", self.tabController.documents);
-                for (int i = 0; i < self.tabController.documents.count; i++) {
-                    NSLog(@"document save %@", self.tabController.documents[i].fileName);
-                    [self.saveFile addObject:self.tabController.documents[i].fileName];
-                }
-                NSDictionary *jsonDictionary = [NSDictionary dictionaryWithObjectsAndKeys:
-                self.saveFile, @"pdf",
-                nil];
-                
-                NSMutableArray * arr = [[NSMutableArray alloc] init];
-
-                [arr addObject:jsonDictionary];
-                [self.socket emit:@"pdf" with:arr];
-            });
-     };
-
-    AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
-    
-    [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
-        if (task.error) {
-            NSLog(@"Error: %@", task.error);
-        }
-        if (task.result) {
-            // Do something with uploadTask.
-            self.sendFlag = YES;
-        }
-        return nil;
-    }];
-    
-    NSLog(@"documentPicker url %@", url);
-    NSFileManager *fileManager = [NSFileManager defaultManager];
-    // 파일경로 저장
-    if (controller.documentPickerMode == UIDocumentPickerModeImport) {
-        NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
-        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:filename];
-        //NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
-        NSError *err = [[NSError alloc] init];
-        // Now create Request for the file that was saved in your documents folder
-        if ([fileManager fileExistsAtPath:filePath]){
-            NSURL *fileURL = [NSURL fileURLWithPath:filePath];
-            NSLog(@"file exist. %@", fileURL);
-            PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-            if (self.tabController.documents.count == 0) {
-                [self.tabController addDocument:document makeVisible:YES animated:NO];
-                [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
-            } else {
-                Boolean sameFlag = NO;
-                for (int i = 0; i < self.tabController.documents.count; i++) {
-                    if ([document.UID isEqualToString:self.tabController.documents[i].UID]) {
-                        sameFlag = YES;
-                    }
-                }
-                if (sameFlag == NO) {
-                    //self.tabController.documents = [self.documents copy];
-                    [self.tabController addDocument:document makeVisible:YES animated:NO];
-                    [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
-                }
-            }
-        } else{
-            BOOL result = [[NSFileManager defaultManager] copyItemAtPath:url.path toPath:filePath error:&err];
-            if (result) {
-                NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
-                PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
-                if (self.tabController.documents.count == 0) {
-                    [self.tabController addDocument:document makeVisible:YES animated:NO];
-                    [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
-                } else {
-                    Boolean sameFlag = NO;
-                    for (int i = 0; i < self.tabController.documents.count; i++) {
-                        if ([document.UID isEqualToString:self.tabController.documents[i].UID]) {
-                            sameFlag = YES;
-                        }
-                    }
-                    if (sameFlag == NO) {
-                        //self.tabController.documents = [self.documents copy];
-                        [self.tabController addDocument:document makeVisible:YES animated:NO];
-                        [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
-                    }
-                }
-            }
-            else {
-                NSLog(@"Import failed. %@", err.localizedDescription);
-            }
-        }
-        [self saveDocuments:self.documents];
-    }
+    [self.socket emit:@"picker" with:@[@{@"comment": @"noteId"}]];
+//    //self.sendFlag = NO;
+//    NSURL *fileURL = url;
+//    NSString *filename = url.lastPathComponent;
+//    NSString *keyValue = [NSString stringWithFormat:@"%@%@%@", self.noteId, @"/", filename];
+//
+//    AWSS3TransferUtilityUploadExpression *expression = [AWSS3TransferUtilityUploadExpression new];
+//    expression.progressBlock = ^(AWSS3TransferUtilityTask *task, NSProgress *progress) {
+//        dispatch_async(dispatch_get_main_queue(), ^{
+//            // Do something e.g. Update a progress bar.
+//            NSLog(@"progressz");
+//        });
+//    };
+//
+//    AWSS3TransferUtilityUploadCompletionHandlerBlock completionHandler = ^(AWSS3TransferUtilityUploadTask *task, NSError *error) {
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                NSLog(@"File upload completed");
+//                self.saveFile = [NSMutableArray new];
+//                NSLog(@"document save %@", self.tabController.documents);
+//                for (int i = 0; i < self.tabController.documents.count; i++) {
+//                    NSLog(@"document save %@", self.tabController.documents[i].fileName);
+//                    [self.saveFile addObject:self.tabController.documents[i].fileName];
+//                }
+//                NSDictionary *jsonDictionary = [NSDictionary dictionaryWithObjectsAndKeys:
+//                self.saveFile, @"pdf",
+//                nil];
+//
+//                NSMutableArray * arr = [[NSMutableArray alloc] init];
+//
+//                [arr addObject:jsonDictionary];
+//                [self.socket emit:@"pdf" with:arr];
+//            });
+//     };
+//
+//    AWSS3TransferUtility *transferUtility = [AWSS3TransferUtility defaultS3TransferUtility];
+//
+//    [[transferUtility uploadFile:fileURL bucket:@"fillgi-prod-image" key:keyValue contentType:@"application/pdf" expression:nil completionHandler:completionHandler]continueWithBlock:^id(AWSTask *task){
+//        if (task.error) {
+//            NSLog(@"Error: %@", task.error);
+//        }
+//        if (task.result) {
+//            // Do something with uploadTask.
+//            self.sendFlag = YES;
+//        }
+//        return nil;
+//    }];
+//
+//    NSLog(@"documentPicker url %@", url);
+//    NSFileManager *fileManager = [NSFileManager defaultManager];
+//    // 파일경로 저장
+//    if (controller.documentPickerMode == UIDocumentPickerModeImport) {
+//        NSString *resourceDocPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) lastObject];
+//        NSString *filePath = [resourceDocPath stringByAppendingPathComponent:filename];
+//        //NSString *filePath = [[NSHomeDirectory() stringByAppendingPathComponent:@"Documents"] stringByAppendingPathComponent:filename];
+//        NSError *err = [[NSError alloc] init];
+//        // Now create Request for the file that was saved in your documents folder
+//        if ([fileManager fileExistsAtPath:filePath]){
+//            NSURL *fileURL = [NSURL fileURLWithPath:filePath];
+//            NSLog(@"file exist. %@", fileURL);
+//            PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+//            if (self.tabController.documents.count == 0) {
+//                [self.tabController addDocument:document makeVisible:YES animated:NO];
+//                [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+//            } else {
+//                Boolean sameFlag = NO;
+//                for (int i = 0; i < self.tabController.documents.count; i++) {
+//                    if ([document.UID isEqualToString:self.tabController.documents[i].UID]) {
+//                        sameFlag = YES;
+//                    }
+//                }
+//                if (sameFlag == NO) {
+//                    //self.tabController.documents = [self.documents copy];
+//                    [self.tabController addDocument:document makeVisible:YES animated:NO];
+//                    [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+//                }
+//            }
+//        } else{
+//            BOOL result = [[NSFileManager defaultManager] copyItemAtPath:url.path toPath:filePath error:&err];
+//            if (result) {
+//                NSURL *fileURL = [[NSURL alloc] initFileURLWithPath:filePath];
+//                PSPDFDocument *document = [[PSPDFDocument alloc] initWithURL:fileURL];
+//                if (self.tabController.documents.count == 0) {
+//                    [self.tabController addDocument:document makeVisible:YES animated:NO];
+//                    [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+//                } else {
+//                    Boolean sameFlag = NO;
+//                    for (int i = 0; i < self.tabController.documents.count; i++) {
+//                        if ([document.UID isEqualToString:self.tabController.documents[i].UID]) {
+//                            sameFlag = YES;
+//                        }
+//                    }
+//                    if (sameFlag == NO) {
+//                        //self.tabController.documents = [self.documents copy];
+//                        [self.tabController addDocument:document makeVisible:YES animated:NO];
+//                        [self.tabController setVisibleDocument:document scrollToPosition:NO animated:NO];
+//                    }
+//                }
+//            }
+//            else {
+//                NSLog(@"Import failed. %@", err.localizedDescription);
+//            }
+//        }
+//        [self saveDocuments:self.documents];
+//    }
 }
 
 -(void)saveDocuments:(NSMutableArray *)noti{

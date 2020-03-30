@@ -237,8 +237,7 @@
             if([[json objectForKey:@"result"] isEqualToString:@"success"]){
                 NSLog(@"success");
                 // Convert to JSON object:
-                self.userArray = [NSJSONSerialization JSONObjectWithData:[[json objectForKey:@"data"] dataUsingEncoding:NSUTF8StringEncoding]
-                                                                      options:0 error:NULL];
+                self.userArray = [NSJSONSerialization JSONObjectWithData:[[json objectForKey:@"data"] dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
                 
                 NSString *name = [NSString stringWithFormat:@"%@%@", self.username, @" (Me)"];
                 NSDictionary *dict=@{@"profile_img" : self.profileImage ,@"username" : name};

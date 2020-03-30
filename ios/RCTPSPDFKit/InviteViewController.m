@@ -159,7 +159,7 @@
     //search
     UIView *searchView = [[UIView alloc] init];
     searchView.backgroundColor = [self colorWithHexString:@"#a8a8a8" alpha:1];
-    searchView.layer.cornerRadius = 20;
+    searchView.layer.cornerRadius = 15;
     [framUiView addSubview:searchView];
     [searchView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.top.equalTo(lineView.mas_bottom).with.offset(self.height * 0.038);
@@ -217,7 +217,7 @@
 
     UIButton *inviteButton = [UIButton buttonWithType:UIButtonTypeCustom];
     inviteButton.backgroundColor = defaultColor;
-    inviteButton.layer.cornerRadius = 20;
+    inviteButton.layer.cornerRadius = 15;
     inviteButton.layer.masksToBounds = true;
     [inviteButton addTarget:self action:@selector(inviteButton) forControlEvents:UIControlEventTouchUpInside];
     [inviteButton setTitle:@"invite" forState:UIControlStateNormal];
