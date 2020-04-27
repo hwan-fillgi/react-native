@@ -16,6 +16,7 @@
 #import "RCTPSPDFKitView.h"
 #import <React/RCTUIManager.h>
 #import "PSCCustomUserInterfaceView.h"
+#import <SendBirdSDK/SendBirdSDK.h>
 
 @import Instant;
 @import SocketIO;
@@ -47,15 +48,6 @@
 
 {
     return [self theSettingsData];
-}
-
--(id) init
-{
-    self = [super init];
-    if (self) {
-        _rightPdf = FALSE;
-    }
-    return self;
 }
 
 RCT_EXPORT_MODULE()
@@ -98,15 +90,20 @@ RCT_CUSTOM_VIEW_PROPERTY(document, PSPDFDocument, RCTPSPDFKitView) {
       NSString *noteId = [dictionary objectForKey:@"noteId"];
       NSString *userId = [dictionary objectForKey:@"userId"];
       
-      NSLog(@"sssss userId %@", userId);
-      NSLog(@"sssss username %@", username);
-      NSLog(@"sssss profileImage %@", profileImage);
       view.userId = userId;
       view.noteId = noteId;
       view.noteType = noteType;
       view.username = username;
       view.profileImage = profileImage;
       _version = noteId;
+      
+      // sendbird
+      NSString *connectId = [NSString stringWithFormat:@"fillgi_%@", userId];
+      [SBDMain connectWithUserId:connectId completionHandler:^(SBDUser * _Nullable user, SBDError * _Nullable error) {
+          if (error != nil) { // Error.
+              return;
+          }
+      }];
       
       if ([noteType isEqualToString:@"viewer"]) {
         // 기본 구성에 URLSession 생성

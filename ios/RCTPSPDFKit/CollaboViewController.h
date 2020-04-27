@@ -1,9 +1,20 @@
-//
-//  CollaboViewController.h
-//  Pods
-//
-//  Created by kim junghwan on 2020/02/19.
-//
+/**
+
+*
+
+* @brief 초대화면
+
+* @details 
+
+* @author kimjunghwan
+
+* @date 2020/02/09
+
+* @version 0.0.1
+
+*
+
+*/
 
 #import <UIKit/UIKit.h>
 #import <React/RCTComponent.h>

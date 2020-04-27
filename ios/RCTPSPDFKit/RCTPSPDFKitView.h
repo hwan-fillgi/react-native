@@ -33,6 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, retain) UIBarButtonItem *browserButton;
 @property (nonatomic, retain) UIBarButtonItem *pageButton;
 @property (nonatomic, retain) UIBarButtonItem *collaboButton;
+@property (nonatomic, retain) UIBarButtonItem *chatButton;
 @property (nonatomic) BOOL disableDefaultActionForTappedAnnotations;
 @property (nonatomic) BOOL disableAutomaticSaving;
 @property (nonatomic, copy, nullable) NSString *annotationAuthorName;

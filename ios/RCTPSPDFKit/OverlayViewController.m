@@ -1,9 +1,21 @@
-//
-//  OverlayViewController.m
-//  AppAuth
-//
-//  Created by kim junghwan on 2020/02/14.
-//
+/**
+
+*
+
+* @brief pdf로딩 화면
+
+* @details pdf가 로드될때 이 화면이 보여진다.
+ 
+* @author kimjunghwan
+
+* @date 2020/02/14
+
+* @version 0.0.1
+
+*
+
+*/
+
 #import "PSCCustomUserInterfaceView.h"
 #import "RCTPSPDFKitView.h"
 #import <React/RCTUtils.h>

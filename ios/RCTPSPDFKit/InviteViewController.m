@@ -1,9 +1,20 @@
-//
-//  InviteViewController.m
-//  AppAuth
-//
-//  Created by kim junghwan on 2020/03/17.
-//
+/**
+
+*
+
+* @brief 초대화면 리스트
+
+* @details
+ 
+* @author kimjunghwan
+
+* @date 2020/03/17
+
+* @version 0.0.1
+
+*
+
+*/
 
 #import "PSCCustomUserInterfaceView.h"
 #import "RCTPSPDFKitView.h"
@@ -50,7 +61,7 @@
     
     // size initial
     self.width = self.topController.view.frame.size.width * 0.29;
-    self.height = self.topController.view.frame.size.height * 0.8;
+    self.height = self.topController.view.frame.size.height * 0.76;
     
     UIColor *defaultColor = [self colorWithHexString:@"#00d82b" alpha:1];
     
@@ -270,6 +281,7 @@
     }
 }
 
+// 유저를 검색하고 유저 데이터를 받아온다.
 - (void)searchMemberList:(NSString *)keyword {
     NSLog(@"search Member List");
     
@@ -314,6 +326,7 @@
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
     return 1;
 }
+
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
 {
     return self.searchArray.count;

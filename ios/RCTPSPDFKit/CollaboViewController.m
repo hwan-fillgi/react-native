@@ -1,9 +1,21 @@
-//
-//  CollaboViewController.m
-//  AppAuth
-//
-//  Created by kim junghwan on 2020/02/19.
-//
+/**
+
+*
+
+* @brief 초대화면
+
+* @details 
+
+* @author kimjunghwan
+
+* @date 2020/02/09
+
+* @version 0.0.1
+
+*
+
+*/
+
 #import "PSCCustomUserInterfaceView.h"
 #import "RCTPSPDFKitView.h"
 #import <React/RCTUtils.h>
@@ -48,7 +60,7 @@
     [self loadMember];
     // size initial
     self.width = self.topController.view.frame.size.width * 0.29;
-    self.height = self.topController.view.frame.size.height * 0.8;
+    self.height = self.topController.view.frame.size.height * 0.76;
     
     UIColor *defaultColor = [self colorWithHexString:@"#00d82b" alpha:1];
     
@@ -210,6 +222,7 @@
     self.view.frame = CGRectMake(self.topController.view.frame.size.width * 0.64, self.topController.view.frame.size.height * 0.09, self.width, self.height);
 }
 
+// 콜라보멤버 데이터를 받아온다.
 - (void)loadMember {
     NSLog(@"load member");
     // 기본 구성에 URLSession 생성

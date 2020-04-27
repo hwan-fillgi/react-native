@@ -22,6 +22,7 @@
 #import "OverlayViewController.h"
 #import "RCTPSPDFKitViewManager.h"
 #import "CollaboViewController.h"
+#import "ChatViewController.h"
 
 #define VALIDATE_DOCUMENT(document, ...) { if (!document.isValid) { NSLog(@"Document is invalid."); if (self.onDocumentLoadFailed) { self.onDocumentLoadFailed(@{@"error": @"Document is invalid."}); } return __VA_ARGS__; }}
 
@@ -45,6 +46,7 @@
 @property (nonatomic, retain) UIActivityIndicatorView *pageIndicator;
 @property (nonatomic, nullable) OverlayViewController *overlayViewController;
 @property (nonatomic, nullable) CollaboViewController *collaboViewController;
+@property (nonatomic, nullable) ChatViewController *chatViewController;
 
 @end
 
@@ -79,14 +81,15 @@
     
     self.collaboViewController = [CollaboViewController new];
     self.collaboViewController.openCollabo = FALSE;
+      
+    self.chatViewController = [ChatViewController new];
+    self.chatViewController.openCollabo = FALSE;
     
     _browser = TRUE;
     _mainColor = [UIColor blackColor];
     _secondaryColor = [UIColor whiteColor];
     _result = [[NSString alloc] init];
 
-    // Navigation bar and toolbar customization. We're limiting appearance customization to instances that are
-    // inside `PSPDFNavigationController` so that we don't affect the appearance of certain system controllers.
     _navBarProxy = [UINavigationBar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
     _toolbarProxy = [UIToolbar appearanceWhenContainedInInstancesOfClasses:@[PSPDFNavigationController.class]];
       
@@ -106,6 +109,7 @@
     _browserButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_tab-change"] style:UIBarButtonItemStylePlain target:self action:@selector(switchBrowser:)];
     _pageButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_add-note"] style:UIBarButtonItemStylePlain target:self action:@selector(addPages:)];
     _collaboButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_colabo"] style:UIBarButtonItemStylePlain target:self action:@selector(collaboList:)];
+    _chatButton = [[UIBarButtonItem alloc] initWithImage:[PSPDFKitGlobal imageNamed:@"icon_chat"] style:UIBarButtonItemStylePlain target:self action:@selector(chatPage:)];
 //    UIButton *ArrowSnapCapture  = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 24 , 24)];
 //
 //    [ArrowSnapCapture.widthAnchor constraintEqualToConstant:24].active = YES;
@@ -122,7 +126,6 @@
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setPlay:) name:@"setPlay" object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(setDismiss:) name:@"setPlaytimsss" object:nil];
   }
-  
   return self;
 }
 
@@ -196,6 +199,10 @@
   self.collaboViewController.username = self.username;
   self.collaboViewController.profileImage = self.profileImage;
   self.collaboViewController.userId = self.userId;
+    
+  self.chatViewController.topController = self.topController;
+  self.chatViewController.noteId = self.noteId;
+  self.chatViewController.userId = self.userId;
 
   [NSLayoutConstraint activateConstraints:
    @[[topControllerView.topAnchor constraintEqualToAnchor:self.topAnchor],
@@ -214,6 +221,7 @@
   }
 }
 
+// 페이지 추가 메소드
 - (void)receivePage {
   NSLog(@"receivePage");
   [self.socket on:@"receivePage" callback:^(NSArray* data, SocketAckEmitter* ack) {
@@ -306,6 +314,7 @@
   }];
 }
 
+// 노트 종료 메소드
 - (void)closeNote {
   NSLog(@"close note %@", self.instantDescriptor.identifier);
     
@@ -338,9 +347,11 @@
   }
 }
 
+// 뒤로가기 버튼 눌렀을때
 - (void)closeButtonPressed:(nullable id)sender {
     NSLog(@"closeButtonPressed %ld", self.instantDescriptor.documentState);
     self.collaboViewController.openCollabo = FALSE;
+    self.chatViewController.openCollabo = FALSE;
     if (self.instantDescriptor.documentState == 3 || self.instantDescriptor.documentState == 0 || self.instantDescriptor.documentState == 7) {
         [self closeNote];
     } else {
@@ -359,6 +370,52 @@
     [self.documents addObjectsFromArray:[notiDic objectForKey:@"play"]];
 }
 
+- (void)chatPage:(nullable id)sender {
+    NSLog(@"chatPage");
+    if (!self.chatViewController.openCollabo) {
+        self.chatViewController.modalPresentationStyle = UIModalPresentationCustom;
+        [self.topController.view addSubview:self.chatViewController.view];
+        self.chatViewController.openCollabo = TRUE;
+    }
+}
+
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event{
+    [super touchesBegan:touches withEvent:event];
+    UITouch *touch = [[event allTouches] anyObject];
+    if ([self.chatViewController.editField isFirstResponder] && [touch view] != self.chatViewController.editField) {
+        self.chatViewController.bottomUiView.backgroundColor = [self colorWithHexString:@"#b4b4b4" alpha:1];
+        [self.chatViewController.sendButton setImage:[PSPDFKitGlobal imageNamed:@"chatting_send"] forState:UIControlStateNormal];
+        [self.chatViewController.editField resignFirstResponder];
+    }
+}
+
+// hex -> rgb color convert
+- (UIColor *)colorWithHexString:(NSString *)str_HEX  alpha:(CGFloat)alpha_range{
+    NSString *noHashString = [str_HEX stringByReplacingOccurrencesOfString:@"#" withString:@""]; // remove the #
+
+    int red = 0;
+    int green = 0;
+    int blue = 0;
+
+    if ([str_HEX length]<=3)
+    {
+        sscanf([noHashString UTF8String], "%01X%01X%01X", &red, &green, &blue);
+        return  [UIColor colorWithRed:red/16.0 green:green/16.0 blue:blue/16.0 alpha:alpha_range];
+    }
+    else if ([str_HEX length]>7)
+    {
+        NSString *mySmallerString = [noHashString substringToIndex:6];
+        sscanf([mySmallerString UTF8String], "%02X%02X%02X", &red, &green, &blue);
+        return  [UIColor colorWithRed:red/255.0 green:green/255.0 blue:blue/255.0 alpha:alpha_range];
+    }
+    else
+    {
+        sscanf([noHashString UTF8String], "%02X%02X%02X", &red, &green, &blue);
+        return  [UIColor colorWithRed:red/255.0 green:green/255.0 blue:blue/255.0 alpha:alpha_range];
+    }
+}
+
+// 콜라보레이션 리스트
 - (void)collaboList:(nullable id)sender {
     NSLog(@"collaboList");
     if (!self.collaboViewController.openCollabo) {
@@ -368,11 +425,13 @@
     }
 }
 
+//
 - (void)addPages:(nullable id)sender {
     NSLog(@"addPages");
     [self.socket emit:@"msg" with:@[@{@"comment": @"noteId"}]];
 }
 
+// 문서 추가하기
 - (void)addDocuments:(nullable id)sender {
     NSLog(@"addDocuments");
     double f1 = 0.11;
@@ -382,6 +441,7 @@
     [[NSNotificationCenter defaultCenter]postNotificationName:@"setPlaytims" object:nil userInfo:notiDic];
 }
 
+// 문서화면 <-> 브라우저
 - (void)switchBrowser:(nullable id)sender {
     if (self.browser) {
         int f1 = 1;
@@ -779,6 +839,8 @@
         barButtonItem = _pageButton;
     } else if([barButtonItemString isEqualToString:@"collaboButtonItem"]) {
         barButtonItem = _collaboButton;
+    } else if([barButtonItemString isEqualToString:@"chatButtonItem"]) {
+        barButtonItem = _chatButton;
     } else{
         barButtonItem = [RCTConvert uiBarButtonItemFrom:barButtonItemString forViewController:self.pdfController];
     }
